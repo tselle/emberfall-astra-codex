@@ -33,7 +33,7 @@ const UI = (() => {
     '<svg class="ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="' +
     (symbols[k] || symbols.book) +
     '"/></svg>';
-  const btn = (label, act, arg = "", disabled = false, cls = "") =>
+  const btn = (label, act, arg = "", disabled = false, cls = "", shortcut = "") =>
     '<button class="btn ' +
     cls +
     '" data-act="' +
@@ -41,8 +41,10 @@ const UI = (() => {
     '" data-arg="' +
     esc(arg) +
     '" ' +
+    (shortcut ? 'data-shortcut="' + esc(shortcut) + '" ' : "") +
     (disabled ? "disabled" : "") +
     ">" +
+    (shortcut ? "<kbd>" + esc(shortcut.toUpperCase()) + "</kbd> " : "") +
     esc(label) +
     "</button>";
   function init() {
@@ -111,10 +113,66 @@ const UI = (() => {
       Game.act("close");
     });
   }
+  const dialogKeys = new Map();
+  let keyPrefix = "";
+  function bindDialogKeys() {
+    dialogKeys.clear();
+    keyPrefix = "";
+    const controls = document.querySelectorAll("#modal-body button, #modal-body input, #modal-body select, #modal-body [tabindex='0']");
+    const reserved = new Set(Array.from(controls, control => control.dataset.shortcut));
+    const alphabet = [..."123456789abcdefghijklmnopqrstuvwxyz"].filter(key => !reserved.has(key)).join("");
+    const width = Math.max(1, Math.ceil(Math.log(Math.max(1, controls.length)) / Math.log(alphabet.length)));
+    // Manual combat reserves 1–8 for actions.
+    const combat = $("dialog").querySelector?.("#battlefield");
+    const unassigned = Array.from(controls).filter(control => !control.disabled && !control.dataset.shortcut);
+    const combatKeys = ["94", "95", "96", "97", "98", "99"];
+    if (combat) {
+      while (combatKeys.length < unassigned.length) {
+        const prefix = combatKeys.splice(combatKeys.findLastIndex(key => key.length === combatKeys[0].length), 1)[0];
+        for (const digit of "123456789") combatKeys.push(prefix + digit);
+      }
+    }
+    controls.forEach((control, index) => {
+      if (control.dataset.shortcut) {
+        if (!control.disabled) dialogKeys.set(control.dataset.shortcut, control);
+        return;
+      }
+      if (control.disabled) return;
+      let key = "";
+      if (combat) key = combatKeys.shift();
+      else for (let i = 0; i < width; i++) {
+        key = alphabet[index % alphabet.length] + key;
+        index = Math.floor(index / alphabet.length);
+      }
+      dialogKeys.set(key, control);
+      const hint = document.createElement("kbd");
+      hint.textContent = key.toUpperCase();
+      if (control.tagName === "BUTTON") control.prepend(hint, " ");
+      else control.before(hint, " ");
+    });
+  }
+  function dialogKey(e) {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+    const key = e.key.toLowerCase();
+    if (key.length !== 1 || !/[a-z1-9]/.test(key)) {
+      keyPrefix = "";
+      return;
+    }
+    e.preventDefault();
+    if (e.repeat) return;
+    keyPrefix += key;
+    const control = dialogKeys.get(keyPrefix);
+    if (control) {
+      keyPrefix = "";
+      if (control.tagName === "BUTTON") control.click();
+      else control.focus();
+    } else if (![...dialogKeys.keys()].some(code => code.startsWith(keyPrefix))) keyPrefix = "";
+  }
   function modal(title, html, tag = "Emberfall", wide = false) {
     $("modal-title").textContent = title;
     $("modal-tag").textContent = tag;
     $("modal-body").innerHTML = html;
+    bindDialogKeys();
     $("dialog").classList.toggle("wide", wide);
     $("dialog").classList.toggle("atlas-page", tag === "Area map");
     if (!$("dialog").open) $("dialog").showModal();
@@ -125,6 +183,51 @@ const UI = (() => {
   }
   const time = (n) =>
     String(Math.floor(n / 60) % 24).padStart(2, "0") + ":" + String(n % 60).padStart(2, "0");
+  function slotDot(label, ready, kind = "") {
+    const text = esc(label);
+    return `<span class="spell-dot${kind ? " " + kind : ""}${ready ? " ready" : ""}" role="img" aria-label="${text}" title="${text}"></span>`;
+  }
+  function resourceSlots(p, minutes) {
+    const circles = Rules.slots(p).map((capacity, i) => {
+      if (!capacity) return "";
+      const circle = i + 1, planned = Rules.plannedSpells(p, circle).slice(), dots = [];
+      function dot(label, ready) {
+        dots.push(slotDot(`Circle ${circle} · ${label}`, ready));
+      }
+      // Editing tomorrow's plan doesn't replace spells still available today.
+      for (const [id, copies] of Object.entries(p.ready || {})) {
+        const sp = Data.spell(id);
+        if (sp?.level !== circle) continue;
+        for (let n = 0; n < copies && dots.length < capacity; n++) {
+          dot(`${sp.name} · Prepared`, true);
+          const pos = planned.indexOf(id);
+          if (pos !== -1) planned.splice(pos, 1);
+        }
+      }
+      while (dots.length < capacity) {
+        const id = planned.shift();
+        dot(id ? `Empty · ${Data.spell(id).name} after rest` : "Empty · No spell planned", false);
+      }
+      return `<span class="slot-circle">${dots.join("")}</span>`;
+    }).join("");
+    let abilities = "";
+    if (p.cls === "Paladin") {
+      const ready = Rules.handsReady(p, minutes);
+      const status = ready ? "Ready · 1/day" : p.handsDay === Math.floor(minutes / 1440) ? "Used · Returns next day" : "Unavailable while downed";
+      abilities = slotDot(`Lay on Hands · ${status}`, ready, "ability-dot");
+    }
+    return circles || abilities ? `<span class="spell-dots">${circles}${abilities}</span>` : "";
+  }
+  function xpMeter(p) {
+    const capped = p.level >= 20;
+    const base = Rules.xpFor(p.cls, p.level);
+    const needed = capped ? 0 : Rules.xpFor(p.cls, p.level + 1) - base;
+    const earned = Math.max(0, Math.min(needed, p.xp - base));
+    const percent = capped ? 100 : Math.floor(100 * earned / needed);
+    const label = capped ? "Maximum level" : earned === needed ? "XP requirement met for training" :
+      `${earned.toLocaleString()} / ${needed.toLocaleString()} XP toward level ${p.level + 1}`;
+    return `<span class="hp xp" role="meter" aria-label="Level progress" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100" aria-valuetext="${label}" title="${label}"><span class="track"><i style="width:${percent}%"></i></span><span class="hptext">${capped ? "Max" : earned === needed ? "Ready" : percent + "%"} XP</span></span>`;
+  }
   let rosterSignature = "",
     lastLog = null;
   function paint(paintScene = true) {
@@ -156,7 +259,7 @@ const UI = (() => {
           : "Exploring on foot";
     $("interact").innerHTML = esc(Game.contextLabel()) + " <kbd>↵</kbd>";
     const signature = s.party
-      .map((p) => [p.name, p.cls, p.level, p.hp, p.maxHp, p.portrait].join("/"))
+      .map((p) => [p.name, p.cls, p.level, p.xp, p.hp, p.maxHp, p.portrait, p.handsDay === Math.floor(s.minutes / 1440), JSON.stringify([p.ready, p.plan, p.customCircles, p.book, p.stats?.[4]])].join("/"))
       .join("|");
     if (signature !== rosterSignature) {
       rosterSignature = signature;
@@ -174,13 +277,13 @@ const UI = (() => {
             esc(p.cls) +
             " · Lv. " +
             p.level +
-            '</span><span class="hp"><span class="track"><i style="width:' +
+            '</span><span class="member-meters"><span class="hp"><span class="track"><i style="width:' +
             Math.max(0, (100 * p.hp) / p.maxHp) +
             '%"></i></span><span class="hptext">' +
             p.hp +
             "/" +
             p.maxHp +
-            " <b>HP</b></span></span></span></button>",
+            " <b>HP</b></span></span>" + xpMeter(p) + "</span>" + resourceSlots(p, s.minutes) + "</span></button>",
         )
         .join("");
       document.querySelectorAll(".member canvas").forEach((c, i) => Figures.portrait(c, s.party[i].portrait));
@@ -223,9 +326,9 @@ const UI = (() => {
         ]
           .map(([k, v]) => '<div class="keyline"><kbd>' + k + "</kbd>" + v + "</div>")
           .join("") +
-        "<p>Choose Move to show the touch controls. In battle, choose an action and select a highlighted square. Lower armour class is stronger. Choose Auto-fight to let the company finish an encounter.</p><h3>Spells and equipment</h3><p>Inspect a scroll in Inventory and choose Learn for a mage. Select Prepare on a character sheet, then rest to memorize the spell. Equipped weapons determine attack range. Dropped items stay at your current coordinates.</p><h3>Commissions and advancement</h3><p>Claim rewards in the warden’s hall. The company shares a quarter of the listed quest experience. Visit the training hall with sufficient experience and 100 gp per new level. Temples can recall fallen adventurers.</p>",
+        "<p>Press the keys printed beside dialog controls in order. Field shortcuts focus the field for editing. Choose Move to show the touch controls. In battle, choose an action and select a highlighted square. Lower armour class is stronger. Choose Auto-fight to let the company finish an encounter.</p><h3>Spells and equipment</h3><p>Inspect a scroll in Inventory and choose Learn for a mage. On a character sheet, use +1 and −1 to assign spell copies by circle. Rest to memorize them. Choose Cast beside a ready healing spell to heal a companion. Equipped weapons determine attack range. Dropped items stay at your current coordinates.</p><h3>Commissions and advancement</h3><p>Claim rewards in the warden’s hall. The company shares a quarter of the listed quest experience. Visit the training hall with sufficient experience and 100 gp per new level. Temples can recall fallen adventurers.</p>",
       "Field guide",
     );
   }
-  return { $, esc, btn, icon, init, modal, close, time, paint, help };
+  return { $, esc, btn, icon, init, dialogKey, modal, close, time, paint, help };
 })();

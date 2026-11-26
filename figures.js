@@ -751,7 +751,27 @@ var Figures = (() => {
         : kind === 2
           ? ["#364147", "#536768", "#7e9a95", "#b5ccc0"]
           : faces[seed % 6].cloth;
-    if (kind === 1) {
+    if (/^(cellar|giant) rat$/i.test(name)) {
+      const fur = /^giant/i.test(name) ? "#685246" : "#846c56";
+      // Side profile: leave air between the bare tail and the arched back.
+      line("#c39782", 18, 25, 24, 24);
+      line("#bb8c79", 24, 24, 27, 21);
+      line("#bb8c79", 27, 21, 26, 18);
+      line("#ceaa93", 26, 18, 22, 16);
+      line("#ceaa93", 22, 16, 21, 14);
+      poly(dark, 1, 24, 7, 19, 12, 17, 16, 17, 20, 20, 21, 24, 19, 27, 9, 27, 6, 25);
+      poly(fur, 2, 24, 8, 20, 12, 18, 16, 18, 19, 20, 20, 24, 17, 26, 9, 26, 6, 24);
+      line("#aa9179", 11, 19, 15, 18);
+      box(dark, 7, 16, 3, 5);
+      box(fur, 6, 17, 4, 3);
+      box("#d0a093", 7, 17, 2, 2);
+      box("#201b1a", 5, 22);
+      box("#d9a098", 1, 24);
+      line("#b8aa96", 0, 21, 3, 23);
+      line("#b8aa96", 0, 26, 3, 25);
+      line("#cb9a84", 9, 26, 7, 27);
+      line("#cb9a84", 18, 26, 15, 27);
+    } else if (kind === 1) {
       for (let j = 0; j < 4; j++) {
         line(ramp[2], 11, 18 + j, 4 - j, 12 + j * 3);
         line(ramp[1], 4 - j, 12 + j * 3, 1, 18 + j * 3);

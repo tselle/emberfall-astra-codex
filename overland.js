@@ -115,7 +115,7 @@ const Overland = (() => {
     if (Math.random() < chance) {
       if (Rules.roll(4) === 1)
         Game.note("A passing carter says, “" + l.rumours[Rules.roll(l.rumours.length) - 1] + "”");
-      else Combat.begin(l.encounters[Rules.roll(l.encounters.length) - 1], "road/" + s.minutes);
+      else Combat.encounter(l.encounters[Rules.roll(l.encounters.length) - 1], "road/" + s.minutes);
     }
   }
   function visit() {
@@ -188,7 +188,7 @@ const Overland = (() => {
       case "lair": {
         let id = a.id + "/lair";
         if (s.cleared[id]) Game.note("The old lair is silent.");
-        else Combat.begin(a.encounters.at(-1), id);
+        else Combat.encounter(a.encounters.at(-1), id);
         break;
       }
     }

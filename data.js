@@ -353,7 +353,36 @@ Cairn flint|beacon_of_flint|13|4|1980
 Sunchain pendant|sunlit_verdict|17|5|2980
 `,
   );
+  function spellDetails(sp) {
+    const roll = sp.dice.join("d");
+    const duration = sp.duration + (sp.duration === 1 ? " round" : " rounds");
+    const effects = {
+      damage: "Deal " + roll + " damage.",
+      drain: "Deal " + roll + " damage and restore that much HP to the caster.",
+      heal: "Restore " + roll + " HP.",
+      cure: "Restore " + roll + " HP and clear poison, lost turns, and attack penalties.",
+      buff: "Grant +2 to attack rolls and +1 to weapon damage for " + duration + ".",
+      debuff: "Reduce attack rolls by 2 for " + duration + ".",
+      disable: "Cause targets to lose " + sp.duration + (sp.duration === 1 ? " turn." : " turns."),
+      turn: "Drive affected undead from the battle.",
+    };
+    const friendly = ["heal", "buff", "cure"].includes(sp.effect);
+    let effect = effects[sp.effect];
+    let target = sp.radius
+      ? (friendly ? "Allies" : "Foes") + " within " + sp.radius * 10 + " ft of the chosen square"
+      : friendly ? "One ally, including yourself" : "One foe";
+    if (sp.id === "magic_missile")
+      effect = "Deal 1d4 + 1 damage multiplied by the number of missiles. Fire one at level 1 and one more every two levels, up to five.";
+    if (sp.id === "stinking_cloud") {
+      target = "All creatures in a 20-foot square";
+      effect = "The cloud lasts " + duration + ". A failed initial save costs " + sp.duration +
+        " turns. Creatures starting a turn in the cloud save again or lose that turn.";
+    }
+    const save = sp.save ? " Save vs. " + sp.save +
+      (["damage", "drain"].includes(sp.effect) ? " for half damage." : " to resist.") : "";
+    return effect + " " + target + ". Range " + sp.range * 10 + " ft." + save;
+  }
   const itemById = new Map(items.map((item) => [item.id, item]));
   const spellById = new Map(spells.map((spell) => [spell.id, spell]));
-  return { items, spells, item: (id) => itemById.get(id), spell: (id) => spellById.get(id) };
+  return { items, spells, spellDetails, item: (id) => itemById.get(id), spell: (id) => spellById.get(id) };
 })();

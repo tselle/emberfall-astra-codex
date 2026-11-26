@@ -29,6 +29,9 @@ input {
 }
 button {
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
 }
 button:focus-visible,
 select:focus-visible,
@@ -39,11 +42,6 @@ input:focus-visible {
 button:disabled {
   opacity: 0.42;
   cursor: default;
-}
-button:hover:not(:disabled) {
-  color: #ffe7bb;
-  border-color: #9c835e;
-  background-color: #33362d;
 }
 svg.ico {
   width: 1.14em;
@@ -458,6 +456,35 @@ h1 {
   height: 100%;
   box-shadow: inset 0 1px #bfca97;
 }
+.spell-dots, .slot-circle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+.spell-dots { margin-top: 3px; column-gap: 6px; }
+.spell-dot {
+  width: 9px;
+  height: 9px;
+  border: 1px solid #ae99bf;
+  border-radius: 50%;
+}
+.spell-dot.ready { background: #ccb0e3; }
+.ability-dot { border-radius: 2px; border-color: #cda766; }
+.ability-dot.ready { background: #e3bf82; }
+.member-meters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+.member-meters .hp {
+  display: grid;
+  gap: 1px;
+}
+.xp .track i {
+  background: #74a6ba;
+  box-shadow: inset 0 1px #a7c8d6;
+}
 .hptext {
   font: 10px monospace;
   color: #b3b9a5;
@@ -509,6 +536,15 @@ kbd {
   min-width: 15px;
   text-align: center;
   padding: 1px 3px;
+}
+#modal-body button[data-act^="battle"] kbd {
+  display: inline-block;
+  margin-right: 3px;
+  padding: 1px 4px;
+  font: bold 13px monospace;
+  color: #272116;
+  background: #efd49b;
+  border-color: #fff0c8;
 }
 .action-btn kbd {
   margin-left: 3px;
@@ -628,6 +664,13 @@ dialog::backdrop {
   flex-wrap: wrap;
   align-items: center;
 }
+.spell-choice {
+  width: 100%;
+}
+.spell-choice small {
+  display: block;
+  margin-top: 3px;
+}
 .btns {
   margin: 12px 0;
 }
@@ -704,7 +747,18 @@ select {
 .wide {
   width: min(800px, 96vw);
 }
+dialog:has(#battlefield) {
+  width: 95vw;
+  height: 95vh;
+  height: 95dvh;
+  max-width: none;
+  max-height: none;
+  margin: auto;
+}
 .battle-canvas {
+  max-width: 120vh;
+  max-width: 120dvh;
+  margin-inline: auto;
   touch-action: manipulation;
 }
 .keyline {
@@ -1062,4 +1116,34 @@ dialog.atlas-page #modal-body {
 .atlas-page .map-canvas {
   height: clamp(220px, 64vh, 760px);
   object-fit: contain;
+}
+
+.roll-readout {
+  margin: 6px 0;
+  padding-inline-start: 8px;
+  border-inline-start: 2px solid var(--edge);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+#modal-body .roll-readout p { margin: 2px 0; }
+.battle-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(13rem, 21%);
+  gap: 12px;
+}
+.combat-roster button {
+  padding: 3px 6px;
+  margin: 2px;
+  font-size: 13px;
+}
+.combat-roster .enemy {
+  color: #efb3a1;
+}
+.combat-roster button[aria-pressed="true"] {
+  outline: 2px solid #71e4ee;
+}
+@media (max-width: 700px) {
+  .battle-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

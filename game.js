@@ -176,13 +176,13 @@ const Game = (() => {
         (m.special.includes("ambush") || (scout && Rules.roll(100) <= Rules.skills(scout)["Move silently"]))
       )
         continue;
-      Combat.begin(e.name, e.id, e.boss);
+      Combat.encounter(e.name, e.id, e.boss);
       return true;
     }
     return false;
   }
   function move(action) {
-    if (s.battle) return;
+    if (s.battle || s.encounter) return;
     if (!s.party.some((p) => p.hp > 0)) return defeat();
     let old = [s.x, s.y, s.dir];
     if (["left", "right"].includes(action)) {
@@ -204,7 +204,7 @@ const Game = (() => {
     let target = tile(x, y),
       foe = level().entities.find((e) => e.x === x && e.y === y && !s.cleared[e.id]);
     if (foe) {
-      Combat.begin(foe.name, foe.id, foe.boss);
+      Combat.encounter(foe.name, foe.id, foe.boss);
       finish();
       return;
     }
@@ -316,7 +316,7 @@ const Game = (() => {
         if (s.area === "town") return enter("wild");
         if (s.floor + 1 < world.levels.length) return enter("dungeon", s.floor + 1);
         const boss = level().entities.find((e) => e.boss);
-        if (!s.cleared[boss.id]) Combat.begin(boss.name, boss.id, true);
+        if (!s.cleared[boss.id]) Combat.encounter(boss.name, boss.id, true);
         else note("The lowest hall lies quiet. Return to the warden.");
         return;
       }
@@ -342,10 +342,21 @@ const Game = (() => {
         note("There is nothing to use here.");
     }
   }
+  function recoverTreasure(gold, items = []) {
+    s.gold += gold;
+    s.inventory.push(...items.map(id => ({ id })));
+    // Appraised gems and jewellery are already included in gold.
+    const value = items.reduce((total, id) => total + Data.item(id).price, gold);
+    const survivors = s.party.filter(p => p.hp > 0);
+    if (!value || !survivors.length) return 0;
+    const share = Math.floor(value / survivors.length), remainder = value % survivors.length;
+    survivors.forEach((p, i) => Rules.gain(p, share + (i < remainder ? 1 : 0)));
+    note(`Treasure worth ${value} gp: ${value} base XP shared among ${survivors.length} surviving companions.`, "good");
+    return value;
+  }
   function loot(type) {
     let drop = Treasure.roll(type, world.adventure.range[0] + s.floor, Math.random);
-    s.gold += drop.gold;
-    s.inventory.push(...drop.items.map((id) => ({ id })));
+    const treasureXP = recoverTreasure(drop.gold, drop.items);
     note(
       "Recovered " +
         drop.gold +
@@ -363,6 +374,7 @@ const Game = (() => {
           ".",
       );
     }
+    return treasureXP;
   }
   function service(k) {
     let a = world.adventure;
@@ -424,6 +436,8 @@ const Game = (() => {
   function sheet(i) {
     let p = s.party[i];
     if (!p) return;
+    const caps = Rules.slots(p);
+    const plans = caps.map((_, j) => Rules.plannedSpells(p, j + 1));
     let fields = (labels, vals) =>
       '<div class="stats">' +
       labels.map((k, j) => "<span>" + k + " <b>" + vals[j] + "</b></span>").join("") +
@@ -459,32 +473,41 @@ const Game = (() => {
         (p.specialization ? " · Specialized in " + esc(Data.item(p.specialization)?.name) : "") +
         "</p><h3>Saving throws</h3>" +
         fields(Rules.saveNames, Rules.saves(p)) +
+        (p.cls === "Paladin"
+          ? "<h3>Lay on Hands</h3><p>Heal yourself or one companion for up to " + 2 * p.level +
+            " HP once per day. " + (Rules.handsReady(p, s.minutes) ? "Available." : "Unavailable.") + "</p>" +
+            (s.battle ? "" : s.party.map((ally, j) => ally.hp > 0 && ally.hp < ally.maxHp
+              ? btn("Heal " + ally.name, "layOnHands", i + "," + j, !Rules.handsReady(p, s.minutes)) : "").join(""))
+          : "") +
         (p.cls === "Thief"
           ? "<h3>Thief skills</h3>" +
             fields(Object.keys(Rules.skills(p)), Object.values(Rules.skills(p))) +
             btn(s.creeping ? "Stop creeping" : "Creep ahead", "creep", i)
           : "") +
         (p.book.length
-          ? "<h3>Spell memorization</h3><p>Choose spells to prepare at the next rest. Available slots by circle · " +
-            (Rules.slots(p).join(" / ") || "None yet") +
+          ? "<h3>Spell memorization</h3><p>Each copy gives one cast after rest. Remove a copy to free a slot. Planned / total by circle · " +
+            (caps.map((cap, j) => plans[j].length + "/" + cap).join(" · ") || "None yet") +
+            (p.cls === "Cleric" ? " (includes Wisdom bonus: " +
+              Rules.slots(p).map((_, i) => "+" + Rules.wisdomBonus(p, i + 1)).join(" / ") + ")" : "") +
             "</p>" +
             p.book
               .map((id) => {
                 let sp = Data.spell(id);
+                const plan = plans[sp.level - 1] || [];
+                const copies = plan.filter(k => k === id).length;
                 return (
                   '<div class="listrow"><span>' +
                   sp.name +
-                  " <small>· " +
+                  " <small>· Circle " +
                   sp.level +
                   " · " +
                   (p.ready[id] || 0) +
-                  " ready</small></span>" +
-                  btn(
-                    p.plan.includes(id) ? "Prepared" : "Prepare",
-                    "prepare",
-                    i + "," + id,
-                    sp.level > Rules.slots(p).length,
-                  ) +
+                  " ready · " + copies + " planned</small><br><small>" + esc(Data.spellDetails(sp)) + "</small></span>" +
+                  btn("−1", "unprepare", i + "," + id, !copies) +
+                  btn("+1", "prepare", i + "," + id, plan.length >= (caps[sp.level - 1] || 0)) +
+                  (!s.battle && ["heal", "cure"].includes(sp.effect) ?
+                    btn("Cast", "fieldHeal", i + "," + id, !p.ready[id] || p.hp <= 0 ||
+                      !s.party.some(ally => ally.hp < ally.maxHp)) : "") +
                   "</div>"
                 );
               })
@@ -550,7 +573,7 @@ const Game = (() => {
             : " · AC " + it.ac
           : "") +
         "</p>" +
-        (sp ? "<p>" + esc(sp.name) + " · " + esc(sp.description) + "</p>" : "") +
+        (sp ? "<p>" + esc(sp.name) + " · " + esc(sp.description) + "</p><p>In combat · " + esc(Data.spellDetails(sp)) + "</p>" : "") +
         s.party
           .map(
             (p, n) =>
@@ -624,6 +647,13 @@ const Game = (() => {
     );
   }
   function act(action, arg = "", el) {
+    if (s.encounter) {
+      if (action === "encounterChoice") {
+        Combat.encounterChoice(arg);
+        finish();
+      } else Combat.encounterPanel();
+      return;
+    }
     if (action === "close") {
       if (!s.party.some((p) => p.hp > 0)) return defeat();
       if (s.battle) {
@@ -657,7 +687,8 @@ const Game = (() => {
           setState(v);
           UI.close();
           note("Saved company restored.");
-          if (s.battle) Combat.panel();
+          if (s.encounter) Combat.encounterPanel();
+          else if (s.battle) Combat.panel();
         }
         break;
       }
@@ -751,22 +782,46 @@ const Game = (() => {
       case "sheet":
         sheet(+arg);
         return;
+      case "layOnHands": {
+        if (s.battle) return;
+        const p = s.party[+ids[0]], ally = s.party[+ids[1]];
+        const amount = Rules.layOnHands(p, ally, s.minutes);
+        if (amount) note(p.name + " uses Lay on Hands on " + ally.name + ", restoring " + amount + " HP.", "good");
+        sheet(+ids[0]);
+        break;
+      }
       case "creep":
         s.creeping = !s.creeping;
         note(s.creeping ? "Your thief scouts ahead silently." : "The company closes ranks.");
         sheet(+arg);
         break;
-      case "prepare": {
-        let p = s.party[+ids[0]],
-          id = ids[1];
-        if (p.plan.includes(id)) p.plan = p.plan.filter((k) => k !== id);
-        else {
-          let same = p.plan.filter((k) => Data.spell(k).level === Data.spell(id).level);
-          if (same.length >= Rules.slots(p)[Data.spell(id).level - 1])
-            p.plan = p.plan.filter((k) => k !== same[0]);
-          p.plan.push(id);
-        }
+      case "prepare":
+      case "unprepare":
+        Rules.changePreparation(s.party[+ids[0]], ids[1], action === "prepare");
         sheet(+ids[0]);
+        break;
+      case "fieldHeal": {
+        const [caster, id, target] = ids;
+        const p = s.party[+caster], sp = Data.spell(id);
+        if (s.battle || !p || p.hp <= 0 || !(p.ready[id] > 0) || !["heal","cure"].includes(sp?.effect)) return;
+        if (target === undefined) {
+          UI.modal(sp.name, "<p>Choose a wounded companion.</p>" + s.party.map((ally, j) =>
+            btn(ally.name + " · " + ally.hp + "/" + ally.maxHp + " HP", "fieldHeal", arg + "," + j,
+              ally.hp >= ally.maxHp)).join("") + btn("Back", "sheet", caster), p.name);
+          return;
+        }
+        const ally = s.party[+target];
+        if (!ally || ally.hp >= ally.maxHp) return;
+        const recipients = sp.radius ? s.party.filter(v => v.hp < v.maxHp) : [ally];
+        for (const member of recipients) {
+          let amount = 0;
+          for (let n = 0; n < sp.dice[0]; n++) amount += Rules.roll(sp.dice[1]);
+          amount = Math.min(amount, member.maxHp - member.hp);
+          member.hp += amount;
+          note(p.name + " casts " + sp.name + " on " + member.name + " for " + amount + " HP.", "good");
+        }
+        p.ready[id]--;
+        sheet(+caster);
         break;
       }
       case "inventory":
@@ -838,7 +893,8 @@ const Game = (() => {
     }
     Navpad.bind();
     finish();
-    if (s.battle) Combat.panel();
+    if (s.encounter) Combat.encounterPanel();
+    else if (s.battle) Combat.panel();
   }
   function transfer(id, newParty) {
     if (newParty) {
@@ -878,6 +934,7 @@ const Game = (() => {
     transfer,
     contextLabel,
     loot,
+    recoverTreasure,
     consume,
     shop,
     service,

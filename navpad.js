@@ -58,8 +58,8 @@ const Navpad = (() => {
     let last = 0;
     document.addEventListener("keydown", (e) => {
       let key = e.key.toLowerCase();
+      if (UI.$("dialog").open) return UI.dialogKey(e);
       if (
-        UI.$("dialog").open ||
         e.ctrlKey ||
         e.altKey ||
         e.metaKey ||

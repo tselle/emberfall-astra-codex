@@ -9,9 +9,10 @@
     while (S().dir !== dir) Game.move((S().dir - dir + 4) % 4 === 1 ? "left" : "right");
   }
   function afterMove() {
+    if (S().encounter) act("encounterChoice", "fight");
     if (S().battle) {
       battles++;
-      act("battleAction", "auto");
+      playAutoFight();
     }
     if (!S().party.some((p) => p.hp > 0))
       throw new Error(

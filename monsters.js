@@ -24,6 +24,52 @@ var Monsters = (() => {
     e: "petrify",
     o: "corrosion",
   };
+  // Visual profiles describe existing attacks; they don't grant new combat abilities.
+  const familyStrike = {
+    "Burrow beast":"bite", "Woodland beast":"bite", "Stalking beast":"claw", "Winged beast":"peck",
+    "Great herbivore":"ram", Crawler:"bite", "Silk hunter":"bite", "Scaled beast":"bite",
+    "Water hunter":"bite", "Ancient saurian":"bite", "Company fighter":"weapon", "Giant kin":"slam",
+    "Restless dead":"touch", "Enchanted beast":"bite", "Deep dweller":"bite", "Dragon kin":"bite",
+    Spirit:"touch", "Fey and woodkin":"touch", Shapeshifter:"claw", Construct:"slam",
+  };
+  function strikeStyle(kind, name, traits) {
+    if (traits.includes("missile")) {
+      if (/porcupine|manticore/i.test(name)) return "quill";
+      if (/cobra/i.test(name)) return "spit";
+      if (/lantern eye/i.test(name)) return "ray";
+      if (kind === "Giant kin" || /treant|hill reaver/i.test(name)) return "stone";
+      return "arrow";
+    }
+    if (kind === "Company fighter") return name === "War Toad" ? "bite" : "weapon";
+    if (/octopus|squid|kraken|vine|trapper|python|constrictor|sea serpent/i.test(name) && kind !== "Company fighter") return "coil";
+    if (/scorpion|wasp|hornet|bee\b|stingray|wyvern|mosquito/i.test(name)) return "sting";
+    if (/badger|wolverine|bear$|lynx|tiger|displacer cat|griff|harpy|hook horror|crab|crayfish|troll|ghoul|ghast|sickleclaw|hag$/i.test(name)) return "claw";
+    if (/bat\b|wererat|werewolf|werejackal|hippopotamus|war toad/i.test(name)) return "bite";
+    if (/horse|mule|pegasus|nightmare/i.test(name)) return "kick";
+    if (/stag beetle/i.test(name)) return "bite";
+    if (/boar|warthog|stag\b|elk|moose|ram\b|goat|bison|aurochs|threehorn|gorgon|unicorn|minotaur|swordfish|narwhal/i.test(name)) return "ram";
+    if (/ape\b|gorilla|clubtail|longneck|mimic|ooze|jelly|pudding|cube|slime|mound|bone colossus/i.test(name)) return "slam";
+    if (/skeleton|death knight|barrow rider|iron king|animated armour/i.test(name)) return "weapon";
+    return familyStrike[kind];
+  }
+  // Encounter reasoning, separate from hit dice and combat strength.
+  function intellect(kind, name) {
+    if (/^(Skeleton|Zombie|Bone Colossus|Grave Lantern|Shambling Mound|Strangling Vine)$/i.test(name) ||
+        kind === "Construct" || /Mold|Slime|Pudding|Ooze|Jelly|Gelatinous Cube|Shrieking Cap/.test(name)) return "mindless";
+    if (["Company fighter", "Giant kin", "Fey and woodkin", "Shapeshifter"].includes(kind) && name !== "War Toad" ||
+        kind === "Dragon kin" && /Dragon|Wyrm/.test(name) && name !== "Dragon Turtle" ||
+        kind === "Restless dead" && !/Ghoul|Shadow/.test(name) ||
+        kind === "Spirit" && !/Hound|Nightmare/.test(name) ||
+        /Sphinx|Centaur|Satyr|Medusa|Naga|Siren|Minotaur|Harpy|Lamia|Lamassu|Lantern Eye/.test(name)) return "reasoning";
+    return "instinctive";
+  }
+  function breathColor(name) {
+    if (/winter|rime|white dragon|silver dragon|ice fiend/i.test(name)) return "#bdefff";
+    if (/electric|storm|blue dragon|bronze dragon/i.test(name)) return "#98bbff";
+    if (/black dragon|copper dragon|slug|green dragon|millipede|fungus|troglodyte|ghast|iron golem/i.test(name)) return "#b5d56f";
+    if (/steam|dragon turtle|marid|kraken|mirror|bell|banshee|shrieking|gorgon/i.test(name)) return "#c6cfdb";
+    return "#ff9856";
+  }
   function family(kind, treasure, shell, courage, records) {
     for (const row of records.trim().split("\n")) {
       const [name, rank, flags, note] = row.trim().split("|");
@@ -55,6 +101,9 @@ var Monsters = (() => {
         special,
         resistance,
         undead,
+        intellect: intellect(kind, name),
+        strikeStyle: strikeStyle(kind, name, special),
+        breathColor: special.includes("breath") ? breathColor(name) : null,
         description: note,
       });
     }

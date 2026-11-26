@@ -174,26 +174,49 @@ const Rules = (() => {
     "9999752",
     "9999862",
   ];
+  // Each threshold adds one daily slot in this circle once the Cleric unlocks it.
+  const wisdomThresholds = [[13, 14], [15, 16], [17], [18]];
+  function wisdomBonus(p, circle) {
+    if (p.cls !== "Cleric") return 0;
+    return (wisdomThresholds[circle - 1] || []).filter(score => p.stats?.[4] >= score).length;
+  }
   function slots(p) {
     let lv = p.level;
     if (["Paladin", "Ranger"].includes(p.cls)) lv = Math.min(7, lv - (p.cls === "Paladin" ? 8 : 7));
     let school = spellSchool(p.cls);
     if (!school || lv < 1) return [];
-    return [...(school === "wizard" ? wizardSlots : priestSlots)[lv - 1]].map(Number);
+    return [...(school === "wizard" ? wizardSlots : priestSlots)[lv - 1]].map((base, i) => Number(base) + wisdomBonus(p, i + 1));
+  }
+  function plannedSpells(p, circle) {
+    const cap = slots(p)[circle - 1] || 0;
+    const pool = p.book.filter(id => Data.spell(id)?.level === circle);
+    const selected = (p.plan || []).filter(id => pool.includes(id));
+    if (p.customCircles?.includes(circle)) return selected.slice(0, cap);
+    // Older plans cycled their chosen spells to fill the circle.
+    const defaults = selected.length ? selected : pool;
+    return defaults.length ? Array.from({length: cap}, (_, i) => defaults[i % defaults.length]) : [];
+  }
+  function changePreparation(p, id, add) {
+    const circle = Data.spell(id)?.level;
+    if (!circle || !p.book.includes(id)) return;
+    const copies = plannedSpells(p, circle);
+    if (add) {
+      if (copies.length >= (slots(p)[circle - 1] || 0)) return;
+      copies.push(id);
+    } else {
+      const index = copies.indexOf(id);
+      if (index < 0) return;
+      copies.splice(index, 1);
+    }
+    p.plan = (p.plan || []).filter(id => Data.spell(id)?.level !== circle).concat(copies);
+    p.customCircles ||= [];
+    if (!p.customCircles.includes(circle)) p.customCircles.push(circle);
   }
   function refresh(p) {
-    const caps = slots(p);
     p.ready = {};
-    for (let i = 0; i < caps.length; i++) {
-      let pool = p.book.filter((id) => Data.spell(id)?.level === i + 1);
-      let choices = (p.plan || []).filter((id) => pool.includes(id));
-      if (!choices.length) choices = pool;
-      if (choices.length)
-        for (let j = 0; j < caps[i]; j++) {
-          let id = choices[j % choices.length];
-          p.ready[id] = (p.ready[id] || 0) + 1;
-        }
-    }
+    slots(p).forEach((_, i) => {
+      for (const id of plannedSpells(p, i + 1)) p.ready[id] = (p.ready[id] || 0) + 1;
+    });
   }
   const skills = (p) =>
     Object.fromEntries(
@@ -301,6 +324,16 @@ const Rules = (() => {
   function ac(p) {
     return (Data.item(p.armour)?.ac ?? 10) - Math.max(0, Math.min(4, p.stats[1] - 14));
   }
+  function handsReady(p, minutes) {
+    return p?.cls === "Paladin" && p.hp > 0 && p.handsDay !== Math.floor(minutes / 1440);
+  }
+  function layOnHands(p, ally, minutes) {
+    if (!handsReady(p, minutes) || !ally || ally.hp <= 0 || ally.hp >= ally.maxHp) return 0;
+    const restored = Math.min(2 * p.level, ally.maxHp - ally.hp);
+    ally.hp += restored;
+    p.handsDay = Math.floor(minutes / 1440);
+    return restored;
+  }
   function company(l = 1) {
     return [
       ["Aldric Vale", "Fighter", "Human"],
@@ -312,6 +345,8 @@ const Rules = (() => {
     ].map(([n, c, r], i) => create(n, c, r, i, l));
   }
   return {
+    handsReady,
+    layOnHands,
     canEquip,
     abilities,
     minimums,
@@ -333,6 +368,9 @@ const Rules = (() => {
     ac,
     skills,
     slots,
+    wisdomBonus,
+    plannedSpells,
+    changePreparation,
     refresh,
     spellSchool,
     movement: (p) => (p.race === "Human" ? 1 : 0.85),

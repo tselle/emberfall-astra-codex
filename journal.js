@@ -57,6 +57,25 @@ const Journal = (() => {
   function commission() {
     UI.modal(Game.world.adventure.giver, entry("main", true) + entry("side", true), "Commission giver");
   }
+  function recordRoll(b, text) {
+    const s = Game.state, history = (s.combatHistory ||= []);
+    if (b.rollBook == null) {
+      b.rollBook = history.length;
+      history.push({ adventure: s.id, time: s.minutes, foe: Monsters.get(b.monster).name, rows: [] });
+    }
+    history[b.rollBook].rows.push(`R${b.round} · ${text}`);
+  }
+  const rollLines = rows => rows.map(text => '<p>' + UI.esc(text) + '</p>').join('');
+  function recentRolls(b) {
+    const rows = Game.state.combatHistory?.[b.rollBook]?.rows;
+    return rows?.length ? '<section class="roll-readout"><strong>Dice rolls</strong>' + rollLines(rows.slice(-4)) + '</section>' : '';
+  }
+  function rollArchive(s) {
+    if (!s.combatHistory?.length) return '';
+    return '<h3>Combat rolls</h3>' + s.combatHistory.slice().reverse().map(book =>
+      '<details><summary>' + UI.esc(`${book.foe} · ${book.adventure} · Day ${1 + Math.floor(book.time / 1440)}, ${UI.time(book.time)} · ${book.rows.length} rolls`) +
+      '</summary><div class="log-history">' + rollLines(book.rows) + '</div></details>').join('');
+  }
   function show() {
     let s = Game.state,
       notes = s.notes.slice().reverse();
@@ -64,7 +83,7 @@ const Journal = (() => {
       "Quest journal",
       entry("main", false) +
         entry("side", false) +
-        "<h3>Dated notes</h3>" +
+        rollArchive(s) + "<h3>Dated notes</h3>" +
         (!notes.length
           ? "<p>Visit the warden’s hall to take a commission.</p>"
           : '<div class="log-history">' +
@@ -100,7 +119,7 @@ const Journal = (() => {
       if (effect === "heal")
         s.party.filter((p) => p.hp > 0).forEach((p) => (p.hp = Math.min(p.maxHp, p.hp + Rules.roll(6))));
       else if (effect === "reveal") l.traps.forEach((t) => (s.seen[t.id] = true));
-      else s.gold += 25 * (s.floor + 1);
+      else Game.recoverTreasure(25 * (s.floor + 1));
       Game.record(l.story?.[1] || "A battered campaign chest holds a handful of silver.");
       return;
     }
@@ -136,5 +155,5 @@ const Journal = (() => {
     commission();
     return true;
   }
-  return { commission, show, relic, handle };
+  return { commission, show, relic, handle, recordRoll, recentRolls };
 })();

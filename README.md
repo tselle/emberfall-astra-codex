@@ -30,6 +30,7 @@ The opening company is ready for play. **Game menu → Create company** lets you
 - Six races and six classes use six ability scores, descending armour class, THAC0, five saving throws, class experience tables and advancement through level 20. Eligible characters receive a prime-requisite experience bonus. Training costs 100 gp times the new level.
 - Inspect a character to view equipment, specialization, thief skills and memorized spells. A mage learns from wizard scrolls in the pack. Choose spells to prepare on the sheet and rest to refill slots. Potions, scrolls, wands and other charged gear are available through **Item** in battle.
 - Search adjacent squares for secrets and traps. Face a marked trap and interact to attempt removal with a thief. Thieves can enable creeping from their character sheet. Listening can reveal an ambush.
+- Found treasure grants 1 base XP per gp of value, including coins, appraised valuables and the listed price of recovered items. The pool is split among surviving companions before prime-requisite bonuses. Picking up previously dropped gear does not award XP.
 - Resting uses healing prayers, restores spell slots and relieves fatigue. A temple can revive the fallen. Items dropped from the shared pack remain on that square.
 - Each adventure has two commissions. Return to its giver for gold and one quarter of the listed experience, split among living companions. Holy sites award experience separately. Side commissions unlock a wilderness postern.
 

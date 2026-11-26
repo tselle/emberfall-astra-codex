@@ -5,7 +5,7 @@ const vm = require("node:vm");
 const assert = require("node:assert/strict");
 const root = path.resolve(__dirname, "..");
 const order =
-  "rules data modules monsters wilds treasure adventures figures view3d ui combat overland campaign journal map bestiary navpad watch game".split(
+  "rules data modules monsters wilds treasure adventures figures view3d ui attack-fx combat overland campaign journal map bestiary navpad watch game".split(
     " ",
   );
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
@@ -38,7 +38,13 @@ vm.runInContext(
     assert(p.hp>0);assert.equal(Rules.saves(p).length,5);
   }
   for(const item of Data.items)if(item.spell)assert(Data.spell(item.spell),item.spell);
-  for(const monster of Monsters.list)assert(Treasure.tables[monster.treasure],monster.name);
+  for(const monster of Monsters.list){
+    assert(Treasure.tables[monster.treasure],monster.name);
+    assert(monster.strikeStyle, 'Missing attack style: ' + monster.name);
+    if(monster.special.includes('breath')) assert(monster.breathColor,monster.name);
+  }
+  for(const [id,style] of Object.entries({cellar_rat:'bite',giant_badger:'claw',giant_bat:'bite',giant_wasp:'sting',giant_porcupine:'quill',spitting_cobra:'spit',hill_giant:'stone',outlaw_bowman:'arrow'}))
+    assert.equal(Monsters.get(id).strikeStyle,style,id);
   assert.equal(Object.keys(Treasure.tables).length,26);
   const treasureRng=Rules.rng("appraisals");
   for(let lv=1;lv<=20;lv++){
@@ -52,6 +58,16 @@ vm.runInContext(
       assert(Rules.slots({cls:c,level:lv}).every(n=>n>0));
     }
   }
+  const cleric = Rules.create("Tester", "Cleric", "Human", 0, 7);
+  const expected = ["3321","4321","5321","5421","5521","5531","5532"];
+  for (let wis = 12; wis <= 18; wis++) {
+    cleric.stats[4] = wis;
+    assert.equal(Rules.slots(cleric).join(""), expected[wis - 12]);
+  }
+  cleric.level = 1;
+  Rules.refresh(cleric);
+  assert.equal(Rules.slots(cleric).join(""), "3");
+  assert.equal(Object.values(cleric.ready).reduce((a,b) => a+b, 0), 3);
   // Validate physical movement separately from the fully revealed dungeon.
   function reachable(l,blocked){
     const queue=[l.start],seen=new Set([l.start.join(",")]);

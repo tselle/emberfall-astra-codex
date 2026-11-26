@@ -66,7 +66,7 @@ const sandbox = vm.createContext({
   setTimeout,
   cancelAnimationFrame: blank,
   requestAnimationFrame: () => 0,
-  matchMedia: () => ({ matches: false }),
+  matchMedia: query => ({ matches: query.includes("prefers-reduced-motion") }),
   localStorage: {
     getItem: (k) => store.get(k) ?? null,
     setItem: (k, v) => store.set(k, v),
