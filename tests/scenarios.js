@@ -300,6 +300,10 @@ function playAutoFight() {
     command("train", 0);
     check(p.level === 2 && state().gold === 200, "training");
     command("close");
+    command("visitService", "S");
+    const stock = UI.$("modal-body").innerHTML;
+    check(stock.includes("1d8 damage · Adjacent") && stock.includes("AC 8 (lower is better)") && stock.includes("Equippable by:"), "shop equipment stats before purchase");
+    check(stock.includes("Cure Light Wounds: Restore 1d8 HP") && stock.includes("1 charge"), "shop magic item stats before purchase");
     command("buy", "healing_potion");
     check(
       state().inventory.some((o) => o.id === "healing_potion"),

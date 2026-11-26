@@ -412,6 +412,17 @@ const Game = (() => {
               .join("");
     UI.modal(services[k], html, a.town);
   }
+  function saleStats(it) {
+    if (it.type === "weapon" || it.type === "armour") {
+      const classes = Rules.classes.filter(cls => Rules.canEquip({cls}, it)).join(", ");
+      const stats = it.type === "armour" ? `AC ${it.ac} (lower is better)` :
+        `${it.damage.join("d")}${it.bonus ? " + " + it.bonus : ""} damage · ${it.range === 1 ? "Adjacent" : "Range " + it.range * 10 + " ft"}${it.bonus ? " · +" + it.bonus + " to hit" : ""}`;
+      return `${stats} · Equippable by: ${classes}`;
+    }
+    const sp = Data.spell(it.spell);
+    return `${it.type} · ${it.charges} ${it.charges === 1 ? "charge" : "charges"} · ${sp.name}: ${Data.spellDetails(sp)}` +
+      (it.type === "scroll" && sp.school === "wizard" ? " A mage can learn this spell from the scroll." : "");
+  }
   function shop() {
     UI.modal(
       "The outfitter",
@@ -424,7 +435,7 @@ const Game = (() => {
             return (
               '<div class="listrow"><span>' +
               esc(it.name) +
-              "</span>" +
+              "<br><small>" + esc(saleStats(it)) + "</small></span>" +
               btn(it.price + " gp", "buy", id, s.gold < it.price) +
               "</div>"
             );
