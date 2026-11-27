@@ -28,6 +28,22 @@ function playAutoFight() {
   const reset = JSON.stringify(Game.state);
   Math.random = Rules.rng("emberfall-playtest-v1");
   const state = () => Game.state;
+  step("Portable party rosters round-trip without replacing campaign state", () => {
+    command("exportParty");
+    const roster = UI.$("party-json").value;
+    const expected = JSON.stringify(state().party);
+    state().party.reverse();
+    command("importParty");
+    UI.$("party-json").value = roster.replace('"weapon":"longsword"', '"weapon":"missing_item"');
+    command("replaceParty");
+    check(UI.$("party-error").textContent && JSON.stringify(state().party) !== expected, "reject malformed member");
+    state().gold += 7;
+    UI.$("party-json").value = roster;
+    command("replaceParty");
+    check(JSON.stringify(state().party) === expected && state().gold === JSON.parse(reset).gold + 7, "roster only");
+    check(JSON.stringify(JSON.parse(localStorage.getItem("emberfall.1.auto")).party) === expected, "import autosaved");
+    Game.setState(JSON.parse(reset)); Game.finish();
+  });
   step("Town movement, turning, character sheets and local save slots", () => {
     check(state().party.length === 6, "ready company");
     Game.move("forward");
@@ -398,11 +414,15 @@ function playAutoFight() {
     const stock = UI.$("modal-body").innerHTML;
     check(stock.includes("1d8 damage · Adjacent") && stock.includes("AC 8 (lower is better)") && stock.includes("Equippable by:"), "shop equipment stats before purchase");
     check(stock.includes("Cure Light Wounds: Restore 1d8 HP") && stock.includes("1 charge"), "shop magic item stats before purchase");
+    const carried = state().inventory.length;
     command("buy", "healing_potion");
-    check(
-      state().inventory.some((o) => o.id === "healing_potion"),
-      "shop",
-    );
+    check(state().inventory[carried].id === "healing_potion" && state().gold === 182, "buy potion");
+    check(UI.$("modal-body").innerHTML.includes("Sell · 9 gp"), "show resale offer");
+    command("sell", carried);
+    check(state().inventory.length === carried && state().gold === 191, "sell one potion at half price");
+    const wand = state().inventory.push({id:"cinder_wand"}, {id:"cinder_wand", charges:1}) - 1;
+    command("sell", wand);
+    check(state().inventory.at(-1).charges === undefined && state().gold === 206, "sell selected partially charged wand");
     command("close");
     p.hp = 1;
     command("camp");

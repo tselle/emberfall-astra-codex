@@ -74,7 +74,7 @@
       act("heal", "20");
     }
     // Outfit the trained company at each new town before setting out.
-    const stock = Treasure.shop(Game.world.adventure.range[0]);
+    const stock = Treasure.shop(...Game.world.adventure.range);
     S().party.forEach((p, i) => {
       if (p.cls === "Mage") {
         for (let circle = 2; circle <= Rules.slots(p).length; circle++) {

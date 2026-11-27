@@ -188,19 +188,13 @@ Z 20:1d3x1000 25:1d4x1000 25:1d4x1000 30:1d4x1000 30:1d6x100 55:10d6 50:5d6 50:3
     for (let i = 0; i < counts[7]; i++) items.push(magic(type, level, rng, i));
     return { gold, copper: copper % 200, items, valuables, coins };
   }
-  function shop(level = 1) {
-    const band = Math.min(4, Math.floor((Math.max(1, level) - 1) / 4));
-    const limit = [3, 7, 11, 15, 20][band];
-    const equipment = Data.items.filter(
-      (i) => ["weapon", "armour"].includes(i.type) && (i.bonus === 0 || i.bonus === band) && i.level <= limit,
-    );
-    const stock = Data.items.filter(
-      (i) =>
-        !["weapon", "armour"].includes(i.type) &&
-        i.level <= limit &&
-        (i.type === "scroll" || i.level === 1 || i.level > limit - 5),
-    );
-    return equipment.concat(stock).map((i) => i.id);
+  function shop(low = 1, high = low) {
+    // Include the equipment tier already available at the start of the adventure.
+    const gearFloor = Math.max(...Data.items.filter(i => i.type === "weapon" && i.level <= low).map(i => i.level));
+    return Data.items.filter(i => {
+      const gear = i.type === "weapon" || i.type === "armour";
+      return i.level <= high && (i.level === 1 || i.type === "scroll" || i.level >= (gear ? gearFloor : low));
+    }).map(i => i.id);
   }
   return { tables, gems, jewellery, gemstone, jewel, roll, shop };
 })();

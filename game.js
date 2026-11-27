@@ -442,13 +442,26 @@ const Game = (() => {
     return `${it.type} · ${it.charges} ${it.charges === 1 ? "charge" : "charges"} · ${sp.name}: ${Data.spellDetails(sp)}` +
       (it.type === "scroll" && sp.school === "wizard" ? " A mage can learn this spell from the scroll." : "");
   }
+  function resalePrice(o) {
+    const it = Data.item(o.id);
+    const fraction = it.charges ? (o.charges ?? it.charges) / it.charges : 1;
+    return Math.max(1, Math.floor(it.price * fraction / 2));
+  }
   function shop() {
+    const carried = s.inventory.map((o, i) => {
+      const it = Data.item(o.id);
+      const charges = it.charges ? ` · ${o.charges ?? it.charges}/${it.charges} charges` : "";
+      return '<div class="listrow"><span>' + esc(it.name) + charges + "</span>" +
+        btn("Sell · " + resalePrice(o) + " gp", "sell", i) + "</div>";
+    }).join("");
     UI.modal(
       "The outfitter",
       "<p>Company purse · " +
         s.gold +
-        " gp</p>" +
-        Treasure.shop(world.adventure.range[0])
+        " gp</p><h3>Sell from company inventory</h3>" +
+        (carried || "<p>No carried items to sell.</p>") +
+        "<h3>Buy from the outfitter</h3>" +
+        Treasure.shop(...world.adventure.range)
           .map((id) => {
             let it = Data.item(id);
             return (
@@ -646,11 +659,55 @@ const Game = (() => {
     o.charges = (o.charges ?? it.charges ?? 1) - 1;
     if (o.charges <= 0) s.inventory.splice(i, 1);
   }
+  // A portable roster is not a save slot: it contains no shared pack or world state.
+  const partyFormat = "emberfall-party";
+  function parseParty(text) {
+    if (text.length > 100000) return null;
+    let data;
+    try { data = JSON.parse(text); } catch { return null; }
+    const between = (n, lo, hi) => Number.isSafeInteger(n) && n >= lo && n <= hi;
+    if (data?.format !== partyFormat || data.version !== 1 || !Array.isArray(data.party) ||
+        !between(data.party.length, 1, 6)) return null;
+    const spells = list => Array.isArray(list) && list.every(id => Data.spell(id));
+    const fields = "name cls race portrait level stats alignment hp maxHp xp weapon armour specialization book plan ready alternateWeapon customCircles handsDay".split(" ");
+    for (const p of data.party) {
+      if (!p || Object.keys(p).some(key => !fields.includes(key)) ||
+          typeof p.name !== "string" || !p.name.trim() || p.name.length > 28 ||
+          typeof p.race !== "string" || !Object.hasOwn(Rules.races, p.race) || !Rules.races[p.race].includes(p.cls) ||
+          !Rules.allowedAlignments(p.cls).includes(p.alignment) || !between(p.portrait, 0, 5) ||
+          !between(p.level, 1, 20) || !between(p.maxHp, 1, Number.MAX_SAFE_INTEGER) ||
+          !between(p.hp, 0, p.maxHp) || !between(p.xp, 0, Number.MAX_SAFE_INTEGER) ||
+          !Array.isArray(p.stats) || p.stats.length !== 6 || !p.stats.every(n => between(n, 1, 25)) ||
+          Data.item(p.weapon)?.type !== "weapon" ||
+          (p.armour !== "" && Data.item(p.armour)?.type !== "armour") ||
+          (p.alternateWeapon && Data.item(p.alternateWeapon)?.type !== "weapon") ||
+          (p.specialization && Data.item(p.specialization)?.type !== "weapon") ||
+          !spells(p.book) || !spells(p.plan) || !p.ready || typeof p.ready !== "object" || Array.isArray(p.ready) ||
+          !Object.entries(p.ready).every(([id, n]) => Data.spell(id) && between(n, 0, 100)) ||
+          (p.customCircles !== undefined && !(Array.isArray(p.customCircles) && p.customCircles.every(n => between(n, 1, 9)))) ||
+          (p.handsDay !== undefined && !Number.isSafeInteger(p.handsDay))) return null;
+    }
+    return data.party;
+  }
+  function partyTransfer(exporting) {
+    UI.modal(exporting ? "Export party" : "Import party",
+      "<p>" + (exporting ? "Copy this roster and keep it in a text file." :
+        "Paste an exported roster below. Replacing your party updates the autosave; manual slots are unchanged.") +
+      " Your characters and equipped gear transfer; gold, shared inventory and adventure progress do not.</p>" +
+      '<label>Party JSON<textarea id="party-json" rows="8" style="width:100%" ' +
+      (exporting ? "readonly" : 'maxlength="100000"') + '></textarea></label><p id="party-error" role="alert"></p>' +
+      (exporting ? "" : btn("Replace current party", "replaceParty")) + btn("Back", "menu"), "Company");
+    if (exporting) {
+      $("party-json").value = JSON.stringify({format: partyFormat, version: 1, party: s.party});
+      $("party-json").select?.();
+    }
+  }
   function menu() {
     UI.modal(
       "Game menu",
       '<div class="btns">' +
         btn("Resume", "close") +
+        btn("Export party", "exportParty") + btn("Import party", "importParty", "", !!s.battle) +
         btn("Create company", "create") +
         btn("How to play", "help") +
         btn("Movement pad · " + (s.pad ? "on" : "off"), "menuPad") +
@@ -706,6 +763,23 @@ const Game = (() => {
       case "menu":
         menu();
         return;
+      case "exportParty":
+        return partyTransfer(true);
+      case "importParty":
+        if (!s.battle) partyTransfer(false);
+        return;
+      case "replaceParty": {
+        if (s.battle || !$("party-json")) return;
+        const party = parseParty($("party-json").value);
+        if (!party) {
+          $("party-error").textContent = "Not a valid Emberfall party export. Your party has not changed.";
+          return;
+        }
+        s.party = party;
+        UI.close();
+        note("Imported company roster.", "story");
+        break;
+      }
       case "slotSave":
         if (read(arg))
           UI.modal(
@@ -747,6 +821,16 @@ const Game = (() => {
         s.y = y;
         s.dir = x < 7 ? 3 : 1;
         service(arg);
+        break;
+      }
+      case "sell": {
+        const i = Number(arg);
+        if (!Number.isInteger(i) || !s.inventory[i]) break;
+        const o = s.inventory[i], price = resalePrice(o);
+        s.inventory.splice(i, 1);
+        s.gold += price;
+        note("Sold " + Data.item(o.id).name + " for " + price + " gp.");
+        shop();
         break;
       }
       case "buy": {

@@ -46,6 +46,14 @@ vm.runInContext(
   for(const [id,style] of Object.entries({cellar_rat:'bite',giant_badger:'claw',giant_bat:'bite',giant_wasp:'sting',giant_porcupine:'quill',spitting_cobra:'spit',hill_giant:'stone',outlaw_bowman:'arrow'}))
     assert.equal(Monsters.get(id).strikeStyle,style,id);
   assert.equal(Object.keys(Treasure.tables).length,26);
+  for (const {range: [low, high]} of Adventures.list) {
+    const stock = new Set(Treasure.shop(low, high));
+    for (const item of Data.items) {
+      if (item.level > high) assert(!stock.has(item.id), item.name);
+      if (item.level === 1 || (item.level >= low && item.level <= high)) assert(stock.has(item.id), item.name);
+    }
+  }
+  assert(Treasure.shop(5, 7).includes('keen_longsword'));
   const treasureRng=Rules.rng("appraisals");
   for(let lv=1;lv<=20;lv++){
     for(const id of Treasure.shop(lv))assert(Data.item(id));
@@ -77,6 +85,7 @@ vm.runInContext(
     }
     return seen;
   }
+  const layouts = new Set();
   let floors=0,sites=0;
   for(const a of Adventures.list){
     const w=Adventures.world(a.id);for(const id of [...a.encounters,a.boss])assert(Monsters.get(id),id);
@@ -95,6 +104,11 @@ vm.runInContext(
       for(const p of [...l.entities,...l.traps])assert(open.has([p.x,p.y].join(",")));
       for(const e of l.entities)assert(Monsters.get(e.name));
     }
+    const coords = w.wild.sites.map(s => [s.x, s.y].join(','));
+    assert.equal(new Set(coords).size, coords.length);
+    assert.equal(w.wild.start.join(','), coords[w.wild.sites.findIndex(s => s.type === 'town')]);
+    assert(!layouts.has(coords.join(';')), a.id + ' repeats another wilderness layout');
+    layouts.add(coords.join(';'));
     const wild=reachable(w.wild,t=>!Wilds.speed[t]);for(const v of w.wild.sites){assert(wild.has([v.x,v.y].join(",")));sites++;}
   }
   console.log("Validated "+Adventures.list.length+" adventures, "+floors+" floors, "+sites+" wilderness sites, "+Monsters.list.length+" monsters, "+Data.items.length+" items, "+Data.spells.length+" spells and 5,200 treasure rolls.");
