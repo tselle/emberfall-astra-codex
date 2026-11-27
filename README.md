@@ -73,3 +73,5 @@ The Chrome runner uses disposable browser profiles and local copies under a subd
 The script order in index.html follows the game’s dependencies. Rules and content precede the renderers. Exploration, combat, campaign, journal, atlas and watch systems feed the game controller loaded last.
 
 Released under the [MIT licence](LICENSE).
+
+The Game menu displays the release version. Run `node scripts/bump-version.js` when preparing a release. It increments the number for the local calendar date and starts at 1 on a new day.

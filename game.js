@@ -1,5 +1,6 @@
 "use strict";
 const Game = (() => {
+  const releaseVersion = "v.2026.11.27.1";
   const prefix = "emberfall.1.",
     $ = UI.$,
     btn = UI.btn,
@@ -719,14 +720,12 @@ const Game = (() => {
     o.charges = (o.charges ?? it.charges ?? 1) - 1;
     if (o.charges <= 0) s.inventory.splice(i, 1);
   }
-  // A portable roster is not a save slot: it contains no shared pack or world state.
   const partyFormat = "emberfall-party";
   function parseParty(text) {
-    if (text.length > 100000) return null;
     let data;
     try { data = JSON.parse(text); } catch { return null; }
     const between = (n, lo, hi) => Number.isSafeInteger(n) && n >= lo && n <= hi;
-    if (data?.format !== partyFormat || data.version !== 1 || !Array.isArray(data.party) ||
+    if (data?.format !== partyFormat || ![1, 2].includes(data.version) || !Array.isArray(data.party) ||
         !between(data.party.length, 1, 6)) return null;
     const spells = list => Array.isArray(list) && list.every(id => Data.spell(id));
     const fields = "name cls race portrait level stats alignment hp maxHp xp weapon armour specialization book plan ready alternateWeapon customCircles handsDay worn".split(" ");
@@ -753,18 +752,26 @@ const Game = (() => {
           (p.customCircles !== undefined && !(Array.isArray(p.customCircles) && p.customCircles.every(n => between(n, 1, 9)))) ||
           (p.handsDay !== undefined && !Number.isSafeInteger(p.handsDay))) return null;
     }
-    return data.party;
+    if (data.version === 2) {
+      if (!between(data.gold, 0, Number.MAX_SAFE_INTEGER) || !between(data.purseCopper, 0, 199) ||
+          !Array.isArray(data.inventory) || !data.inventory.every(obj => {
+            const it = Data.item(obj?.id);
+            return it && Object.keys(obj).every(key => key === "id" || key === "charges") &&
+              (obj.charges === undefined || between(obj.charges, it.rechargeable ? 0 : 1, it.charges));
+          })) return null;
+    }
+    return data;
   }
   function partyTransfer(exporting) {
     UI.modal(exporting ? "Export party" : "Import party",
-      "<p>" + (exporting ? "Copy this roster and keep it in a text file." :
-        "Paste an exported roster below. Replacing your party updates the autosave; manual slots are unchanged.") +
-      " Your characters and equipped gear transfer; gold, shared inventory and adventure progress do not.</p>" +
+      "<p>" + (exporting ? "Copy this party to a text file. It includes the characters, equipped gear, company pack and purse." :
+        "Paste an exported party to replace your characters, company pack and purse in this adventure. Older roster files keep your current pack and purse. Importing updates the autosave.") + "</p>" +
       '<label>Party JSON<textarea id="party-json" rows="8" style="width:100%" ' +
-      (exporting ? "readonly" : 'maxlength="100000"') + '></textarea></label><p id="party-error" role="alert"></p>' +
+      (exporting ? "readonly" : "") + '></textarea></label><p id="party-error" role="alert"></p>' +
       (exporting ? "" : btn("Replace current party", "replaceParty")) + btn("Back", "menu"), "Company");
     if (exporting) {
-      $("party-json").value = JSON.stringify({format: partyFormat, version: 1, party: s.party});
+      $("party-json").value = JSON.stringify({format: partyFormat, version: 2, party: s.party,
+        inventory: s.inventory, gold: s.gold, purseCopper: s.purseCopper ?? 0});
       $("party-json").select?.();
     }
   }
@@ -795,7 +802,7 @@ const Game = (() => {
             );
           })
           .join(""),
-      "Emberfall",
+      "EMBERFALL\u00a0\u00a0" + releaseVersion,
     );
   }
   function defeat() {
@@ -836,14 +843,19 @@ const Game = (() => {
         return;
       case "replaceParty": {
         if (s.battle || !$("party-json")) return;
-        const party = parseParty($("party-json").value);
-        if (!party) {
+        const imported = parseParty($("party-json").value);
+        if (!imported) {
           $("party-error").textContent = "Not a valid Emberfall party export. Your party has not changed.";
           return;
         }
-        s.party = party;
+        s.party = imported.party;
+        if (imported.version === 2) {
+          s.inventory = imported.inventory;
+          s.gold = imported.gold;
+          s.purseCopper = imported.purseCopper;
+        }
         UI.close();
-        note("Imported company roster.", "story");
+        note("Imported company.", "story");
         break;
       }
       case "slotSave":

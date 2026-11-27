@@ -28,20 +28,41 @@ function playAutoFight() {
   const reset = JSON.stringify(Game.state);
   Math.random = Rules.rng("emberfall-playtest-v1");
   const state = () => Game.state;
-  step("Portable party rosters round-trip without replacing campaign state", () => {
+  step("Party transfer restores the roster, shared pack and purse together", () => {
+    const s = state();
+    s.inventory.push({id:"cinder_wand", charges:1}, {id:"cinder_wand"}, {id:"locket_of_the_third_sister", charges:0});
+    s.gold = 73;
+    s.purseCopper = 141;
     command("exportParty");
-    const roster = UI.$("party-json").value;
-    const expected = JSON.stringify(state().party);
-    state().party.reverse();
-    command("importParty");
-    UI.$("party-json").value = roster.replace('"weapon":"longsword"', '"weapon":"missing_item"');
-    command("replaceParty");
-    check(UI.$("party-error").textContent && JSON.stringify(state().party) !== expected, "reject malformed member");
-    state().gold += 7;
-    UI.$("party-json").value = roster;
-    command("replaceParty");
-    check(JSON.stringify(state().party) === expected && state().gold === JSON.parse(reset).gold + 7, "roster only");
-    check(JSON.stringify(JSON.parse(localStorage.getItem("emberfall.1.auto")).party) === expected, "import autosaved");
+    const file = JSON.parse(UI.$("party-json").value);
+    const pack = JSON.stringify(s.inventory), roster = JSON.stringify(s.party);
+    s.party.reverse();
+    s.inventory = [];
+    s.gold = 7;
+    s.purseCopper = 3;
+    s.minutes += 30;
+    const minutes = s.minutes;
+    function load(data) {
+      command("importParty");
+      UI.$("party-json").value = JSON.stringify(data);
+      command("replaceParty");
+    }
+    for (const bad of [{gold:-1}, {purseCopper:200}, {inventory:[{id:"missing_item"}]},
+        {inventory:[{id:"cinder_wand", charges:999}]}, {party:[]}]) {
+      load({...file, ...bad});
+      check(UI.$("party-error").textContent && JSON.stringify(s.party) !== roster && !s.inventory.length &&
+        s.gold === 7 && s.purseCopper === 3, "invalid import leaves the company intact");
+    }
+    load({format:file.format, version:1, party:file.party});
+    check(JSON.stringify(s.party) === roster && !s.inventory.length && s.gold === 7 && s.purseCopper === 3,
+      "legacy roster retains the destination's pack and purse");
+    load(file);
+    command("slotLoad", "auto");
+    check(JSON.stringify(state().inventory) === pack && JSON.stringify(state().party) === roster &&
+      state().gold === 73 && state().purseCopper === 141 && state().minutes === minutes,
+      "autosave restores exact company possessions and keeps current adventure time");
+    load({...file, gold:0, purseCopper:0, inventory:[]});
+    check(!state().inventory.length && state().gold === 0 && state().purseCopper === 0, "empty pack and purse replace existing possessions");
     Game.setState(JSON.parse(reset)); Game.finish();
   });
   step("Town movement, turning, character sheets and local save slots", () => {

@@ -1147,3 +1147,7 @@ dialog.atlas-page #modal-body {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+#modal-tag.release-label {
+  text-transform: none;
+}

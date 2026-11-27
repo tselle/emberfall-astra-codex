@@ -181,6 +181,7 @@ const UI = (() => {
   function modal(title, html, tag = "Emberfall", wide = false) {
     $("modal-title").textContent = title;
     $("modal-tag").textContent = tag;
+    $("modal-tag").classList.toggle("release-label", title === "Game menu");
     $("modal-body").innerHTML = html;
     bindDialogKeys();
     $("dialog").classList.toggle("wide", wide);
