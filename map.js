@@ -97,7 +97,7 @@ const Atlas = (() => {
         (s.area === "town"
           ? "I · Inn　S · Shop　G · Warden　H · Training　T · Temple　> · North gate"
           : s.area === "wild"
-            ? Game.world.wild.sites.map((v) => v.name + " (" + v.x + ", " + v.y + ")").join(" · ")
+            ? "Uncharted ground is dark. Known sites: " + Overland.knownSites().map((v) => v.name + " (" + v.x + ", " + v.y + ")").join(" · ")
             : "Gold arrow · Company　 Red square · Known trap　 < > · Stairs") +
         "</p><p>Company position · " +
         s.x +

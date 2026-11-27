@@ -4,7 +4,7 @@ A self-contained, party-based fantasy RPG with first-person exploration, overlan
 
 ## Getting started
 
-Your six adventurers begin in Thornwick. Choose **Town square → Warden’s hall** to accept the two commissions. Return to the square or walk to the north gate to reach the wilderness. The map shows the dungeon entrance and the company’s coordinates.
+Your six adventurers begin in Thornwick. Choose **Town square → Warden’s hall** to accept the two commissions. Return to the square or walk to the north gate to reach the wilderness. Only the town and its nearby roads are charted at first. Travel reveals the surrounding terrain and marks discovered sites, including the dungeon entrance, on your map.
 
 The opening company is ready for play. **Game menu → Create company** lets you roll characters, choose a race, eligible class and alignment, and specialize a fighter. You can embark with one to six adventurers. **Campaign** lets you bring the same company to another adventure or start a fresh one at its suggested level.
 

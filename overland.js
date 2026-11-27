@@ -24,6 +24,8 @@ const Overland = (() => {
     let s = Game.state;
     return Game.world.wild.sites.find((v) => v.x === s.x && v.y === s.y);
   }
+  const known = (x, y) => Game.state.visited[Game.tileKey(x, y)];
+  const knownSites = () => Game.world.wild.sites.filter(v => known(v.x, v.y));
   function draw(canvas, small = false) {
     let c = canvas.getContext("2d"),
       l = Game.world.wild,
@@ -37,6 +39,7 @@ const Overland = (() => {
     c.fillRect(0, 0, w, h);
     for (let y = 0; y < 15; y++)
       for (let x = 0; x < 23; x++) {
+        if (!known(x, y)) continue;
         let tile = l.grid[y][x],
           px = ox + x * n,
           py = oy + y * n;
@@ -61,7 +64,7 @@ const Overland = (() => {
       }
     c.textAlign = "center";
     c.textBaseline = "middle";
-    for (let v of l.sites) {
+    for (let v of knownSites()) {
       let x = ox + (v.x + 0.5) * n,
         y = oy + (v.y + 0.5) * n;
       c.fillStyle = "#323d30";
@@ -123,7 +126,7 @@ const Overland = (() => {
       v = site(),
       a = Game.world.adventure;
     if (!v) {
-      let list = Game.world.wild.sites
+      let list = knownSites()
         .map(
           (v) =>
             '<div class="listrow"><span>' +
@@ -198,5 +201,5 @@ const Overland = (() => {
     Game.shop();
     return true;
   }
-  return { draw, visit, site, step, handle };
+  return { draw, visit, site, step, handle, knownSites };
 })();

@@ -98,8 +98,27 @@ const Game = (() => {
     return null;
   }
   function reveal() {
-    if (s.area !== "dungeon") return;
-    let radius = 2;
+    if (s.area !== "dungeon" && s.area !== "wild") return;
+    if (s.area === "wild") {
+      const [tx, ty] = world.wild.start;
+      if (!s.visited[tileKey(tx, ty)]) {
+        // The town map charts only the first few road segments out of town.
+        const roads = [[tx, ty, 0]];
+        s.visited[tileKey(tx, ty)] = true;
+        for (let i = 0; i < roads.length; i++) {
+          const [x, y, steps] = roads[i];
+          if (steps === 5) continue;
+          for (const [dx, dy] of Modules.dirs) {
+            const nx = x + dx, ny = y + dy, key = tileKey(nx, ny);
+            if (!s.visited[key] && ["r", "b"].includes(world.wild.grid[ny]?.[nx])) {
+              s.visited[key] = true;
+              roads.push([nx, ny, steps + 1]);
+            }
+          }
+        }
+      }
+    }
+    const radius = s.area === "wild" ? 1 : 2;
     for (let y = s.y - radius; y <= s.y + radius; y++)
       for (let x = s.x - radius; x <= s.x + radius; x++)
         if (level().grid[y]?.[x]) s.visited[tileKey(x, y)] = true;
