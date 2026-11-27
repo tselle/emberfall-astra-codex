@@ -77,6 +77,16 @@ function playAutoFight() {
     if (typeof HTMLButtonElement !== "undefined") {
       check(document.querySelector("#roster .member-name").textContent.includes(party[1].name), "roster repaints");
     }
+    for (let dir = 0; dir < 4; dir++) {
+      state().dir = dir;
+      const allies = state().party.map((_, index) => ({index, enemy:false}));
+      const foe = {enemy:true};
+      Battlefield.create("test/marching-order", [...allies, foe]);
+      const visibleOrder = allies.slice().sort((a, b) =>
+        (a.x + a.y) - (b.x + b.y) || (a.x - a.y) - (b.x - b.y));
+      check(visibleOrder.map(u => u.index + 1).join() === "1,2,3,4,5,6",
+        "battlefield rows match roster left to right, top to bottom facing direction " + dir);
+    }
     command("slotLoad", "auto");
     check(state().party[1].name === party[0].name, "autosave restores order");
     command("sheet", 1);

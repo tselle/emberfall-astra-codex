@@ -77,6 +77,14 @@ const Battlefield = (() => {
       u.x = p.x;
       u.y = p.y;
     }
+    // Read the isometric formation like the roster: top row first, left to right.
+    const allies = units.filter(u => !u.enemy);
+    const formation = allies.map(({x, y}) => ({x, y, screen: toScreen(x, y)}))
+      .sort((a, b) => a.screen[1] - b.screen[1] || a.screen[0] - b.screen[0]);
+    allies.forEach((ally, i) => {
+      ally.x = formation[i].x;
+      ally.y = formation[i].y;
+    });
     return { grid, place: wild ? Wilds.names[biome] : Game.level.name };
   }
   function visible(grid, a, b) {
@@ -91,7 +99,8 @@ const Battlefield = (() => {
     }
     return true;
   }
-  return { width, height, surfaces, flood, create, visible };
+  const toScreen = (x, y) => [420 + (x - y) * 29, 38 + (x + y) * 14];
+  return { width, height, surfaces, flood, create, visible, toScreen };
 })();
 
 const Combat = (() => {
@@ -583,7 +592,7 @@ const Combat = (() => {
       setTimeout(run, 30);
     }
   }
-  const toScreen = (x, y) => [420 + (x - y) * 29, 38 + (x + y) * 14];
+  const toScreen = Battlefield.toScreen;
   let inspectedBattle, pinnedUnit, hoveredUnit;
   function rosterName(v) {
     if (!v.enemy) return name(v);
