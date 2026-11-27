@@ -31,6 +31,8 @@ The opening company is ready for play. **Game menu → Create company** lets you
 - Inspect a character to view equipment, specialization, thief skills and memorized spells. A mage learns from wizard scrolls in the pack. Choose spells to prepare on the sheet and rest to refill slots. Potions, scrolls, wands and other charged gear are available through **Item** in battle.
 - Search adjacent squares for secrets and traps. Face a marked trap and interact to attempt removal with a thief. Thieves can enable creeping from their character sheet. Listening can reveal an ambush.
 - Ordinary encounters award the personal treasure of defeated enemies. Fleeing enemies take their purses with them. Wilderness lairs and final guardians can also yield one shared hoard. Small coins accumulate toward the next gold piece (20 sp or 200 cp).
+- Open a character sheet to change equipment by body slot, or inspect an item in the company inventory to give it to a wearer. Characters can wear two rings, one on each hand. A shield is slung while a two-handed weapon is active. Matching enchantments use the strongest bonus.
+- The outfitter and treasure tables include 61 named magical wearables, from the Mason’s Seamglass for finding secret doors to the Ferryman’s Return Fare for warding off level drain. In battle, choose **Item** to invoke a worn relic. Once-per-rest relics recharge when their wearer rests. Older charged rings and charms retain their remaining uses when equipped or returned to the pack.
 - Found treasure grants 1 base XP per gp of value, including coins, appraised valuables and the listed price of recovered items. The pool is split among surviving companions before prime-requisite bonuses. Picking up previously dropped gear does not award XP.
 - Resting uses healing prayers, restores spell slots and relieves fatigue. A temple can revive the fallen. Items dropped from the shared pack remain on that square.
 - Each adventure has two commissions. Return to its giver for gold and one quarter of the listed experience, split among living companions. Holy sites award experience separately. Side commissions unlock a wilderness postern.
@@ -42,7 +44,7 @@ The opening company is ready for play. **Game menu → Create company** lets you
 | E2 · Barrow of the Iron King | 3–5 | Ashmere |
 | E3 · The Witch-Queen of Ravenmoor | 5–7 | Wickerhaven |
 
-The atlas also contains **50 seeded expeditions**, with ten per four-level band. Each band contains four small, three medium, two large and one huge expedition. Layout, population, event, ordinary door, secret, trap and wilderness generation use named random streams. The full campaign contains 162 dungeon floors, 353 monster entries, 296 items, 75 wizard and priest spells, and treasure types A through Z.
+The atlas also contains **50 seeded expeditions**, with ten per four-level band. Each band contains four small, three medium, two large and one huge expedition. Layout, population, event, ordinary door, secret, trap and wilderness generation use named random streams. The full campaign contains 162 dungeon floors, 353 monster entries, 357 items, 75 wizard and priest spells, and treasure types A through Z.
 
 ## Saves and hosting
 

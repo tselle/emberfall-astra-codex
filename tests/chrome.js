@@ -17,6 +17,21 @@ try {
   const scenario = fs.readFileSync(path.join(__dirname, "scenarios.js"), "utf8");
   const controls = `
     const initialState = JSON.stringify(Game.state);
+    const padButton = document.querySelector('#commands [data-act="pad"]');
+    const padInitiallyOpen = Game.state.pad;
+    padButton.focus();
+    padButton.dispatchEvent(new MouseEvent("click", {bubbles:true, detail:1}));
+    if (document.activeElement === padButton || Game.state.pad === padInitiallyOpen)
+      throw Error("Pointer command stayed focused or failed to activate");
+    padButton.focus();
+    padButton.click();
+    if (document.activeElement !== padButton || Game.state.pad !== padInitiallyOpen)
+      throw Error("Keyboard-style activation lost focus or failed to activate");
+    const inventoryButton = document.querySelector('#commands [data-act="inventory"]');
+    inventoryButton.focus();
+    inventoryButton.dispatchEvent(new MouseEvent("click", {bubbles:true, detail:1}));
+    document.querySelector('[data-act="close"]').click();
+    if (document.activeElement === inventoryButton) throw Error("Closed dialog refocused pointer command");
     Combat.begin("cellar_rat", "test/hotkeys");
     const panel = document.getElementById("dialog").getBoundingClientRect();
     if (Math.abs(panel.width - innerWidth * 0.95) > 1 || Math.abs(panel.height - innerHeight * 0.95) > 1)

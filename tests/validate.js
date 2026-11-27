@@ -54,18 +54,28 @@ vm.runInContext(
     }
   }
   assert(Treasure.shop(5, 7).includes('keen_longsword'));
+  const relics = Data.items.filter(it => it.lore);
+  assert(relics.length >= 60);
+  for (const it of relics) {
+    assert(Data.wornDetails(it).length && (it.robe || Data.slotsFor(it).every(slot => Data.wearSlots[slot])), it.name);
+  }
+  const foundRelics = new Set();
   const treasureRng=Rules.rng("appraisals");
   for(let lv=1;lv<=20;lv++){
     for(const id of Treasure.shop(lv))assert(Data.item(id));
     for(const t of Object.keys(Treasure.tables))for(let n=0;n<10;n++){
       const hoard=Treasure.roll(t,lv,treasureRng);assert(Number.isInteger(hoard.gold)&&hoard.gold>=0);
-      for(const id of hoard.items)assert(Data.item(id));
+      for(const id of hoard.items) {
+        assert(Data.item(id));
+        if(Data.item(id).lore) foundRelics.add(id);
+      }
     }
     for(const c of Rules.classes){
       if(lv>1)assert(Rules.xpFor(c,lv)>Rules.xpFor(c,lv-1));
       assert(Rules.slots({cls:c,level:lv}).every(n=>n>0));
     }
   }
+  assert(foundRelics.size >= 30, "varied wearable treasure across level bands");
   const cleric = Rules.create("Tester", "Cleric", "Human", 0, 7);
   const expected = ["3321","4321","5321","5421","5521","5531","5532"];
   for (let wis = 12; wis <= 18; wis++) {

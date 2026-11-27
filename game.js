@@ -451,11 +451,19 @@ const Game = (() => {
     UI.modal(services[k], html, a.town);
   }
   function saleStats(it) {
+    const slots = Data.slotsFor(it);
+    if (slots.length) {
+      const sp = Data.spell(it.spell);
+      return [slots.map(slot => Data.wearSlots[slot]).join(" / "), Data.wornDetails(it),
+        it.slot === "offhand" ? "Fighters, rangers, paladins and clerics" : "",
+        sp ? sp.name + " · " + Data.spellDetails(sp) + " · " +
+          (it.rechargeable ? "Once per rest while worn" : it.charges + " charges") : ""].filter(Boolean).join(" · ");
+    }
     if (it.type === "weapon" || it.type === "armour") {
       const classes = Rules.classes.filter(cls => Rules.canEquip({cls}, it)).join(", ");
       const stats = it.type === "armour" ? `AC ${it.ac} (lower is better)` :
         `${it.damage.join("d")}${it.bonus ? " + " + it.bonus : ""} damage · ${it.range === 1 ? "Adjacent" : "Range " + it.range * 10 + " ft"}${it.bonus ? " · +" + it.bonus + " to hit" : ""}`;
-      return `${stats} · Equippable by: ${classes}`;
+      return [stats, Data.wornDetails(it), "Equippable by: " + classes].filter(Boolean).join(" · ");
     }
     const sp = Data.spell(it.spell);
     return `${it.type} · ${it.charges} ${it.charges === 1 ? "charge" : "charges"} · ${sp.name}: ${Data.spellDetails(sp)}` +
@@ -463,7 +471,7 @@ const Game = (() => {
   }
   function resalePrice(o) {
     const it = Data.item(o.id);
-    const fraction = it.charges ? (o.charges ?? it.charges) / it.charges : 1;
+    const fraction = it.charges && !it.rechargeable ? (o.charges ?? it.charges) / it.charges : 1;
     return Math.max(1, Math.floor(it.price * fraction / 2));
   }
   function shop() {
@@ -494,6 +502,34 @@ const Game = (() => {
           .join(""),
       "Market",
     );
+  }
+  function equipment(i) {
+    const p = s.party[i];
+    const rows = Object.entries(Data.wearSlots).map(([slot, label]) => {
+      const obj = p.worn?.[slot], it = Data.item(obj?.id);
+      const detail = it?.charges ? " · " + (obj.charges ?? it.charges) + "/" + it.charges + " charges" : "";
+      const stowed = slot === "offhand" && it && !Rules.shieldReady(p) ? " · Slung while using two hands" : "";
+      return '<div class="listrow"><span>' + label + " · " + esc(it?.name || "Empty") + detail + stowed +
+        (it ? "<br><small>" + esc(Data.wornDetails(it) || Data.spell(it.spell)?.name) + "</small>" : "") + "</span>" +
+        (s.battle ? "" : btn(it ? "Change" : "Equip", "wearSlot", i + "," + slot)) + "</div>";
+    }).join("");
+    return "<h3>Equipment</h3><p>Matching enchantments use the strongest bonus.</p>" +
+      '<div class="listrow"><span>Torso · ' + esc(Data.item(p.armour)?.name || "Unarmoured") + "</span>" +
+      (!s.battle ? btn(p.armour ? "Change" : "Equip", "wearSlot", i + ",torso") : "") + "</div>" + rows;
+  }
+  function wearSlot(i, slot) {
+    const p = s.party[i], torso = slot === "torso", current = torso && p.armour ? {id:p.armour} : p.worn?.[slot];
+    let choices = "";
+    s.inventory.forEach((obj, index) => {
+      const it = Data.item(obj.id);
+      if ((torso ? it.type === "armour" : Data.slotsFor(it).includes(slot)) && Rules.canEquip(p, it))
+        choices += '<div class="listrow"><span>' + esc(it.name) + "<br><small>" +
+          esc(saleStats(it)) + "</small></span>" + btn("Equip", torso ? "equip" : "wear", [index,i,slot].join(","), p.hp <= 0) + "</div>";
+    });
+    UI.modal(p.name + " · " + (torso ? "Torso" : Data.wearSlots[slot]),
+      (current ? "<p>" + esc(Data.item(current.id).name) + " · " + esc(saleStats(Data.item(current.id))) +
+        "</p><p>" + esc(Data.item(current.id).lore || "") + "</p>" + btn("Return to pack", "unwear", i + "," + slot) : "") +
+      (choices || "<p>No suitable items in the company pack.</p>") + btn("Back", "sheet", i), "Equipment");
   }
   function sheet(i) {
     let p = s.party[i];
@@ -541,7 +577,7 @@ const Game = (() => {
         (p.alternateWeapon && !s.battle ? '<div class="btns">' +
           btn("Switch to " + Data.item(p.alternateWeapon).name, "switchWeapon", i) +
           btn("Return " + Data.item(p.alternateWeapon).name + " to pack", "packAlternate", i) + "</div>" : "") +
-        "<h3>Saving throws</h3>" +
+        equipment(i) + "<h3>Saving throws</h3>" +
         fields(Rules.saveNames, Rules.saves(p)) +
         (p.cls === "Paladin"
           ? "<h3>Lay on Hands</h3><p>Heal yourself or one companion for up to " + 2 * p.level +
@@ -643,16 +679,21 @@ const Game = (() => {
             : " · AC " + it.ac
           : "") +
         "</p>" +
-        (sp ? "<p>" + esc(sp.name) + " · " + esc(sp.description) + "</p><p>In combat · " + esc(Data.spellDetails(sp)) + "</p>" : "") +
+        (it.robe ? "<p>" + esc(Data.wornDetails(it)) + "</p>" : "") +
+        (Data.slotsFor(it).length ? "<p>" + esc(saleStats(it)) + "</p>" : "") +
+        (it.lore ? "<p>" + esc(it.lore) + "</p>" : "") +
+        (sp && !Data.slotsFor(it).length ? "<p>" + esc(sp.name) + " · " + esc(sp.description) + "</p><p>In combat · " + esc(Data.spellDetails(sp)) + "</p>" : "") +
         s.party
           .map(
             (p, n) =>
               '<div class="listrow"><span>' +
               esc(p.name) +
               "</span>" +
+              Data.slotsFor(it).map(slot => btn("Wear · " + Data.wearSlots[slot], "wear", [i,n,slot].join(","),
+                p.hp <= 0 || !Rules.canEquip(p, it))).join("") +
               (gear
                 ? btn("Equip", "equip", i + "," + n, p.hp <= 0 || !Rules.canEquip(p, it))
-                : sp && ["heal", "cure"].includes(sp.effect)
+                : sp && !it.rechargeable && ["heal", "cure"].includes(sp.effect)
                   ? btn("Use", "use", i + "," + n, p.hp <= 0)
                   : "") +
               (it.type === "scroll" && p.cls === "Mage" && sp.school === "wizard"
@@ -688,8 +729,14 @@ const Game = (() => {
     if (data?.format !== partyFormat || data.version !== 1 || !Array.isArray(data.party) ||
         !between(data.party.length, 1, 6)) return null;
     const spells = list => Array.isArray(list) && list.every(id => Data.spell(id));
-    const fields = "name cls race portrait level stats alignment hp maxHp xp weapon armour specialization book plan ready alternateWeapon customCircles handsDay".split(" ");
+    const fields = "name cls race portrait level stats alignment hp maxHp xp weapon armour specialization book plan ready alternateWeapon customCircles handsDay worn".split(" ");
     for (const p of data.party) {
+      if (p?.worn !== undefined && (!p.worn || typeof p.worn !== "object" || Array.isArray(p.worn) ||
+          !Object.entries(p.worn).every(([slot, obj]) => {
+            const it = Data.item(obj?.id);
+            return it && Data.slotsFor(it).includes(slot) && Rules.canEquip(p, it) &&
+              (obj.charges === undefined || between(obj.charges, it.rechargeable ? 0 : 1, it.charges));
+          }))) return null;
       if (!p || Object.keys(p).some(key => !fields.includes(key)) ||
           typeof p.name !== "string" || !p.name.trim() || p.name.length > 28 ||
           typeof p.race !== "string" || !Object.hasOwn(Rules.races, p.race) || !Rules.races[p.race].includes(p.cls) ||
@@ -1000,6 +1047,32 @@ const Game = (() => {
         s.inventory.push(s.ground[tileKey(s.x, s.y)].splice(+arg, 1)[0]);
         inventory();
         break;
+      case "wearSlot":
+      case "unwear": {
+        const [i, slot] = ids, p = s.party[+i];
+        if (s.battle || !p || !(slot === "torso" || Object.hasOwn(Data.wearSlots, slot))) return;
+        if (action === "wearSlot") return wearSlot(+i, slot);
+        if (slot === "torso" && p.armour) {
+          s.inventory.push({id:p.armour});
+          p.armour = "";
+        } else if (p.worn?.[slot]) {
+          s.inventory.push(p.worn[slot]);
+          delete p.worn[slot];
+        } else return;
+        sheet(+i);
+        break;
+      }
+      case "wear": {
+        const [index, i, slot] = ids, p = s.party[+i], obj = s.inventory[+index], it = Data.item(obj?.id);
+        if (s.battle || !p || p.hp <= 0 || !it || !Rules.canEquip(p, it)) return;
+        if (!Data.slotsFor(it).includes(slot)) return;
+        p.worn ||= {};
+        s.inventory.splice(+index, 1);
+        if (p.worn[slot]) s.inventory.push(p.worn[slot]);
+        p.worn[slot] = obj;
+        sheet(+i);
+        break;
+      }
       case "equip":
       case "use":
       case "learn": {
@@ -1007,7 +1080,7 @@ const Game = (() => {
           p = s.party[n],
           it = Data.item(s.inventory[i].id);
         if (action === "equip") {
-          if (s.battle || !Rules.canEquip(p, it) || p.hp <= 0) return;
+          if (s.battle || !["weapon", "armour"].includes(it.type) || !Rules.canEquip(p, it) || p.hp <= 0) return;
           let k = it.type;
           s.inventory.splice(i, 1);
           if (k === "weapon" && p.weapon && Data.item(p.weapon).missile !== it.missile) {
@@ -1022,10 +1095,12 @@ const Game = (() => {
           }
         } else {
           let sp = Data.spell(it.spell);
+          if (!sp || it.rechargeable || !["heal", "cure"].includes(sp.effect)) return;
           p.hp = Math.min(p.maxHp, p.hp + Math.max(1, sp.dice[0] * Rules.roll(sp.dice[1])));
           consume(i);
         }
-        inventory();
+        if (ids[2] === "torso") sheet(n);
+        else inventory();
         break;
       }
       case "rescue":

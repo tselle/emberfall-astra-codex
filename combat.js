@@ -99,8 +99,50 @@ const Battlefield = (() => {
     }
     return true;
   }
+  function attackVisible(grid, attacker, target) {
+    if (solid(grid[target.y]?.[target.x])) return false;
+    if (visible(grid, target, attacker)) return true;
+
+    // Look back from the target center. Between consecutive directions to grid
+    // corners a ray crosses exactly the same tiles, even through a narrow gap.
+    const dx = attacker.x - target.x, dy = attacker.y - target.y;
+    const horizontal = Math.abs(dx) >= Math.abs(dy);
+    const forward = Math.sign(horizontal ? dx : dy);
+    const slope = (x, y) => horizontal ? y / (x * forward) : x / (y * forward);
+    const corners = [-0.5, 0.5].flatMap(x => [-0.5, 0.5].map(y => slope(dx + x, dy + y)));
+    const low = Math.min(...corners), high = Math.max(...corners);
+    const slopes = new Set([low, high]);
+    for (let x = Math.min(0, dx) - 0.5; x <= Math.max(0, dx) + 0.5; x++) {
+      for (let y = Math.min(0, dy) - 0.5; y <= Math.max(0, dy) + 0.5; y++) {
+        if ((horizontal ? x : y) * forward <= 0) continue;
+        const angle = slope(x, y);
+        if (angle > low && angle < high) slopes.add(angle);
+      }
+    }
+    function rayReachesAttacker(angle) {
+      const vx = horizontal ? forward : angle, vy = horizontal ? angle : forward;
+      const sx = Math.sign(vx), sy = Math.sign(vy);
+      let x = target.x, y = target.y, crossedX = 0, crossedY = 0;
+      while (!solid(grid[y]?.[x])) {
+        if (x === attacker.x && y === attacker.y) return true;
+        const cross = (1 + 2 * crossedX) * Math.abs(vy) - (1 + 2 * crossedY) * Math.abs(vx);
+        if (Math.abs(cross) < 1e-10) {
+          if (solid(grid[y]?.[x + sx]) && solid(grid[y + sy]?.[x])) return false;
+          // Either side square touches this ray at its corner.
+          if ((x + sx === attacker.x && y === attacker.y) ||
+              (x === attacker.x && y + sy === attacker.y)) return true;
+        }
+        if (cross <= 1e-10) { x += sx; crossedX++; }
+        if (cross >= -1e-10) { y += sy; crossedY++; }
+      }
+      return false;
+    }
+    const sorted = [...slopes].sort((a, b) => a - b);
+    return sorted.some((angle, i) => rayReachesAttacker(angle) ||
+      (i > 0 && rayReachesAttacker((sorted[i - 1] + angle) / 2)));
+  }
   const toScreen = (x, y) => [420 + (x - y) * 29, 38 + (x + y) * 14];
-  return { width, height, surfaces, flood, create, visible, toScreen };
+  return { width, height, surfaces, flood, create, visible, attackVisible, toScreen };
 })();
 
 const Combat = (() => {
@@ -118,6 +160,7 @@ const Combat = (() => {
   const scale = () => B().field ? 2 : 1;
   const visible = (a,b) => Battlefield.visible(grid(), a, b);
   const reaches = (a,b,n) => dist(a,b) <= n && visible(a,b);
+  const attackReaches = (a,b,n) => dist(a,b) <= n && Battlefield.attackVisible(grid(), a, b);
   function health(u, v) {
     if (u.enemy) u.hp = Math.max(0, Math.min(M(u).hp, v));
     else P(u).hp = Math.max(0, Math.min(P(u).maxHp, v));
@@ -147,7 +190,7 @@ const Combat = (() => {
     b.round++;
     let rolls = b.units.map((u, i) => ({
       i,
-      r: checkRoll(name(u) + ' initiative', 10, u.enemy ? 0 : -Math.floor((P(u).stats[1] - 10) / 4)),
+      r: checkRoll(name(u) + ' initiative', 10, u.enemy ? 0 : -Math.floor((P(u).stats[1] - 10) / 4) - Rules.gearBonus(P(u), "initiative")),
     }));
     b.order = rolls.sort((a, b) => a.r - b.r).map((o) => o.i);
     b.index = 0;
@@ -261,7 +304,7 @@ const Combat = (() => {
       lev = p?.level || m?.level,
       bon =
         (w?.bonus || 0) +
-        Rules.racialAttackBonus(p, w) +
+        Rules.racialAttackBonus(p, w) + (w?.missile ? Rules.gearBonus(p, "aim") : 0) +
         (p?.specialization && p.specialization === w?.base ? 1 : 0) +
         (p?.cls === "Ranger" ? 1 : 0) +
         (p ? Math.max(0, p.stats[w?.missile ? 1 : 0] - 15) : 0);
@@ -292,6 +335,8 @@ const Combat = (() => {
       (p?.specialization && p.specialization === w?.base ? 2 : 0) +
       (p?.cls === "Ranger" || p?.cls === "Paladin" ? 2 : 0) +
       (u.buff > 0 ? 1 : 0);
+    if (p && !w?.missile) damage += Rules.gearBonus(p, "force");
+    if (p && v.enemy && M(v).undead) damage += Rules.gearBonus(p, "undead");
     if (back) damage *= Rules.skills(p).Backstab;
     if (v.enemy && M(v).resistance > (w?.bonus || 0))
       damage = Math.max(1, Math.floor(damage / (1 + M(v).resistance)));
@@ -299,9 +344,9 @@ const Combat = (() => {
     log((back ? "Backstab! " : "") + name(u) + " hits " + name(v) + " for " + damage + ".");
     if (u.enemy && alive(v)) {
       let save = saveRoll(v, 'secondary effect save', Rules.saves(P(v))[0]);
-      if (!save && m.special.includes("poison")) v.poison = 3;
-      if (!save && m.special.includes("paralysis")) v.disabled = 2;
-      if (!save && m.special.includes("drain")) {
+      if (!save && m.special.includes("poison") && !Rules.gearBonus(P(v), "poisonWard")) v.poison = 3;
+      if (!save && m.special.includes("paralysis") && !Rules.gearBonus(P(v), "freeAction")) v.disabled = 2;
+      if (!save && m.special.includes("drain") && !Rules.gearBonus(P(v), "drainWard")) {
         let p = P(v);
         if (p.level > 1) {
           p.level--;
@@ -322,6 +367,12 @@ const Combat = (() => {
   function range(u, weapon = P(u)?.weapon) {
     const n = u.enemy ? (M(u).special.includes("missile") ? 7 : 1) : Data.item(weapon)?.range || 1;
     return n > 1 ? n * scale() : n;
+  }
+  function canStrike(u, v, weapon = P(u)?.weapon) {
+    const reach = range(u, weapon);
+    const melee = u.enemy ? reach === 1 : !Data.item(weapon)?.missile;
+    if (melee && dist(u, v) === 1) return true;
+    return attackReaches(u, v, reach);
   }
   function touchTarget(u, v) {
     return v && !v.enemy && alive(v) && hp(v) < P(v).maxHp && reaches(u, v, 1);
@@ -347,7 +398,7 @@ const Combat = (() => {
         log(name(u) + " breaks and flees.");
         return;
       }
-      if (m.special.includes("breath") && reaches(u, target, 5 * scale()) && (!u.breathed || checkRoll(name(u) + ' breath recharge', 6, 0, t => t === 1 ? 'ready' : 'not ready') === 1)) {
+      if (m.special.includes("breath") && attackReaches(u, target, 5 * scale()) && (!u.breathed || checkRoll(name(u) + ' breath recharge', 6, 0, t => t === 1 ? 'ready' : 'not ready') === 1)) {
         u.breathed = true;
         queueEffect(target, "breath", true, {color:m.breathColor});
         for (let v of foes.filter((v) => reaches(target, v, scale()))) {
@@ -367,8 +418,8 @@ const Combat = (() => {
           .map(Data.spell),
         ally = b.units.find((v) => !v.enemy && !v.fled && hp(v) < P(v).maxHp / 2),
         sp =
-          ready.find((v) => ally && v.effect === "heal" && reaches(u, ally, v.range * scale())) ||
-          ready.find((v) => v.effect === "damage" && reaches(u, target, v.range * scale()));
+          ready.find((v) => ally && v.effect === "heal" && attackReaches(u, ally, v.range * scale())) ||
+          ready.find((v) => v.effect === "damage" && attackReaches(u, target, v.range * scale()));
       if (sp && allowSpells && S().autoSpells !== "no") {
         const recipient = sp.effect === "heal" ? ally : target;
         if (S().autoSpells === "ask") {
@@ -382,10 +433,10 @@ const Combat = (() => {
     }
     if (!u.enemy && P(u).alternateWeapon) {
       const spare = Data.item(P(u).alternateWeapon);
-      if (foes.some(v => reaches(u, v, range(u, spare.id))) &&
-          (!spare.missile || !foes.some(v => reaches(u, v, range(u))))) Rules.switchWeapon(P(u));
+      if (foes.some(v => canStrike(u, v, spare.id)) &&
+          (!spare.missile || !foes.some(v => canStrike(u, v)))) Rules.switchWeapon(P(u));
     }
-    const inReach = foes.find(v => reaches(u, v, range(u)));
+    const inReach = foes.find(v => canStrike(u, v));
     if (inReach) {
       strike(u, inReach);
       return;
@@ -398,7 +449,7 @@ const Combat = (() => {
     u.x = cells[0].x;
     u.y = cells[0].y;
     if (cells[0].steps) log(name(u) + " advances.");
-    const afterMove = foes.find(v => reaches(u, v, range(u)));
+    const afterMove = foes.find(v => canStrike(u, v));
     if (afterMove) strike(u, afterMove);
   }
   function inCloud(tile, origin) {
@@ -414,6 +465,7 @@ const Combat = (() => {
         (sp.id === "stinking_cloud" ? inCloud(v, at) : reaches(at, v, sp.radius * scale())) &&
         (friendly ? v.enemy === u.enemy : sp.id === "stinking_cloud" || v.enemy !== u.enemy),
     )) {
+      if (!v.enemy && sp.id === "stinking_cloud" && Rules.gearBonus(P(v), "gasWard")) continue;
       let saved =
         sp.save &&
         saveRoll(v, sp.name + ' save', v.enemy
@@ -437,7 +489,7 @@ const Combat = (() => {
           }
         }
       } else if (!saved) {
-        if (sp.effect === "disable") v.disabled = sp.duration;
+        if (sp.effect === "disable" && (v.enemy || !Rules.gearBonus(P(v), "freeAction"))) v.disabled = sp.duration;
         if (sp.effect === "debuff") v.debuff = sp.duration;
         if (sp.effect === "turn" && v.enemy && M(v).undead) v.fled = true;
       }
@@ -555,10 +607,10 @@ const Combat = (() => {
       if (!b.started) {
         b.started = true;
         if (u.poison > 0) {
-          health(u, hp(u) - 2);
+          if (u.enemy || !Rules.gearBonus(P(u), "poisonWard")) health(u, hp(u) - 2);
           u.poison--;
         }
-        if (b.clouds.some((c) => inCloud(u, c)) && !saveRoll(u, 'cloud save', u.enemy ? 13 : Rules.saves(P(u))[0]))
+        if ((u.enemy || !(Rules.gearBonus(P(u), "gasWard") || Rules.gearBonus(P(u), "freeAction"))) && b.clouds.some((c) => inCloud(u, c)) && !saveRoll(u, 'cloud save', u.enemy ? 13 : Rules.saves(P(u))[0]))
           u.disabled = Math.max(1, u.disabled || 0);
         if (u.buff) u.buff--;
         if (u.debuff) u.debuff--;
@@ -755,10 +807,21 @@ const Combat = (() => {
     };
   }
   function spellTarget(u, at, v, sp) {
-    if (!sp || !reaches(u, at, sp.range * scale())) return false;
+    if (!sp || !attackReaches(u, at, sp.range * scale())) return false;
     if (sp.radius) return true;
     if (!v) return false;
     return ["heal", "buff", "cure"].includes(sp.effect) ? !v.enemy : v.enemy;
+  }
+  // Numeric keys also work for battles saved before worn items had powers.
+  function battleItem(p, key) {
+    return Object.hasOwn(Data.wearSlots, key) ? p?.worn?.[key] : S().inventory[Number(key)];
+  }
+  function usableItems(p) {
+    const entries = [...S().inventory.entries(), ...Object.entries(p?.worn || {})];
+    return entries.filter(([key, obj]) => {
+      const it = Data.item(obj.id);
+      return it.spell && (obj.charges ?? it.charges) > 0 && (!it.rechargeable || typeof key === "string");
+    });
   }
   function target(x, y) {
     let b = B();
@@ -777,18 +840,22 @@ const Combat = (() => {
       panel();
       Game.save();
       return;
-    } else if (b.mode === "attack" && v?.enemy && reaches(u, v, range(u))) strike(u, v);
+    } else if (b.mode === "attack" && v?.enemy && canStrike(u, v)) strike(u, v);
     else if (b.mode === "hands") valid = healByTouch(u, v);
     else if (b.mode === "spell" || b.mode === "item") {
       let isItem = b.mode === "item",
-        obj = isItem && S().inventory[+b.selection],
+        obj = isItem && battleItem(P(u), b.selection),
         sp = Data.spell(isItem ? Data.item(obj?.id)?.spell : b.selection);
       if (!v) v = b.units.find(t => t.x === x && t.y === y && spellRecipient(t, sp));
       if (!spellTarget(u, at, v, sp) || (!isItem && !(P(u).ready[sp.id] > 0)))
         valid = false;
       else {
         cast(u, sp, at);
-        if (isItem) Game.consume(+b.selection);
+        if (isItem && Object.hasOwn(Data.wearSlots, b.selection)) {
+          const it = Data.item(obj.id);
+          obj.charges = (obj.charges ?? it.charges) - 1;
+          if (!obj.charges && !it.rechargeable) delete P(u).worn[b.selection];
+        } else if (isItem) Game.consume(+b.selection);
         else P(u).ready[sp.id]--;
       }
     } else valid = false;
@@ -851,7 +918,7 @@ const Combat = (() => {
           (k === "move" && !movementLeft(u)) ||
           (k === "hands" && !Rules.handsReady(p, S().minutes)) ||
             (k === "spells" && !Object.values(p.ready).some((v) => v > 0)) ||
-            (k === "items" && !S().inventory.some((o) => Data.item(o.id).spell)),
+            (k === "items" && !usableItems(p).length),
           b.mode === k ? "primary" : "",
           key,
         ),
@@ -864,7 +931,7 @@ const Combat = (() => {
           ? `Choose a highlighted square (${movementLeft(u)} steps left), or choose another action. A diagonal costs one step.`
           : b.mode === "spell" || b.mode === "item"
             ? "Choose the target square for " +
-              Data.spell(b.mode === "spell" ? b.selection : Data.item(S().inventory[+b.selection].id).spell)
+              Data.spell(b.mode === "spell" ? b.selection : Data.item(battleItem(p, b.selection).id).spell)
                 .name +
               "."
             : "";
@@ -872,7 +939,7 @@ const Combat = (() => {
     let selectedSpell;
     if (["spell", "item"].includes(b.mode)) {
       const sp = Data.spell(
-        b.mode === "spell" ? b.selection : Data.item(S().inventory[+b.selection].id).spell,
+        b.mode === "spell" ? b.selection : Data.item(battleItem(p, b.selection).id).spell,
       );
       selectedSpell = sp;
       instruction += " " + Data.spellDetails(sp) + " " + sp.description;
@@ -899,10 +966,8 @@ const Combat = (() => {
             })
             .join("")
         : b.mode === "items"
-          ? S()
-              .inventory.map((o, i) =>
-                Data.item(o.id).spell ? UI.btn(Data.item(o.id).name, "battleItem", i) : "",
-              )
+          ? usableItems(p).map(([key, obj]) => UI.btn(Data.item(obj.id).name +
+                (typeof key === "string" ? " · " + Data.wearSlots[key] : ""), "battleItem", key))
               .join("")
           : "";
     if (b.proposedSpell) {
@@ -914,7 +979,7 @@ const Combat = (() => {
     }
     let targets = b.units.filter(v => {
       if (b.auto || b.resolved || !spellRecipient(v, selectedSpell)) return false;
-      if (b.mode === "attack") return v.enemy && reaches(u, v, range(u));
+      if (b.mode === "attack") return v.enemy && canStrike(u, v);
       if (b.mode === "hands") return touchTarget(u, v);
       if (!selectedSpell) return false;
       if (selectedSpell.id === "stinking_cloud") return true;
@@ -1016,6 +1081,7 @@ const Combat = (() => {
       return true;
     }
     if (a === "battleSpell" || a === "battleItem") {
+      if (a === "battleItem" && !usableItems(P(u)).some(([key]) => String(key) === arg)) return true;
       b.mode = a === "battleSpell" ? "spell" : "item";
       b.selection = arg;
       panel();
@@ -1046,7 +1112,7 @@ const Combat = (() => {
     if (arg === "turn") {
       let lv = P(u).level - (P(u).cls === "Paladin" ? 2 : 0);
       let n = 0;
-      for (let v of b.units.filter((v) => v.enemy && alive(v) && M(v).undead && visible(u,v)))
+      for (let v of b.units.filter((v) => v.enemy && alive(v) && M(v).undead && Battlefield.attackVisible(grid(), u, v)))
         if (checkRoll(name(u) + ' turns ' + name(v), 20, lv, t => t >= 9 + M(v).undead ? 'turned' : 'resisted') >= 9 + M(v).undead) {
           v.fled = true;
           n++;

@@ -138,7 +138,7 @@ const Rules = (() => {
     return a[Math.min(i, a.length - 1)].map((v, j) =>
       Math.max(
         2,
-        v -
+        v - gearBonus(p, ["poisonSave", "", "", "breath", "spellSave"][j]) -
           (p.cls === "Paladin" ? 2 : 0) -
           (["Dwarf", "Halfling"].includes(p.race) && [0, 1, 4].includes(j) ? 2 : 0),
       ),
@@ -240,7 +240,8 @@ const Rules = (() => {
         k,
         i === 5
           ? Math.min(5, 2 + Math.floor((p.level - 1) / 4))
-          : Math.min(95, [35, 40, 35, 45, 35][i] + (p.level - 1) * 5 + Math.max(0, p.stats[1] - 12) * 2),
+          : Math.min(95, [35, 40, 35, 45, 35][i] + (p.level - 1) * 5 + Math.max(0, p.stats[1] - 12) * 2 +
+              gearBonus(p, ["locks", "", "disarm", "stealth", "stealth"][i])),
       ]),
     );
   function create(name, cls, race, portrait = 0, level = 1, customStats = null, alignment = null) {
@@ -322,8 +323,24 @@ const Rules = (() => {
     [p.weapon, p.alternateWeapon] = [p.alternateWeapon, p.weapon];
     return true;
   }
+  function shieldReady(p) {
+    return !["shortbow","longbow","light_crossbow","heavy_crossbow","greatsword","pike","glaive","staff"]
+      .includes(Data.item(p.weapon)?.base);
+  }
+  // Matching enchantments use the strongest worn bonus, including across the two rings.
+  function gearBonus(p, trait) {
+    let best = Data.item(p?.armour)?.traits?.[trait] || 0;
+    for (const [slot, obj] of Object.entries(p?.worn || {})) {
+      if (slot === "offhand" && !shieldReady(p)) continue;
+      const value = Data.item(obj.id)?.traits?.[trait];
+      if (value) best = Math.max(best, value);
+    }
+    return best;
+  }
   function canEquip(p, it) {
+    if (Data.slotsFor(it).length) return it.slot !== "offhand" || warrior(p.cls) || p.cls === "Cleric";
     if (it.type === "armour") {
+      if (it.robe) return true;
       if (p.cls === "Mage") return false;
       if (p.cls === "Thief") return it.id.endsWith("leather_armour") || it.id.endsWith("padded_jack");
       return true;
@@ -347,7 +364,9 @@ const Rules = (() => {
     return allowed[p.cls].includes(it.base);
   }
   function ac(p) {
-    return (Data.item(p.armour)?.ac ?? 10) - Math.max(0, Math.min(4, p.stats[1] - 14));
+    const base = Data.item(p.armour)?.ac ?? (gearBonus(p, "bracerAC") || 10);
+    return base - Math.max(0, Math.min(4, p.stats[1] - 14)) - gearBonus(p, "guard") -
+      gearBonus(p, "shield");
   }
   function handsReady(p, minutes) {
     return p?.cls === "Paladin" && p.hp > 0 && p.handsDay !== Math.floor(minutes / 1440);
@@ -372,7 +391,7 @@ const Rules = (() => {
   return {
     handsReady,
     layOnHands,
-    canEquip,
+    canEquip, gearBonus, shieldReady,
     switchWeapon,
     racialAttackBonus,
     abilities,
@@ -402,6 +421,6 @@ const Rules = (() => {
     changePreparation,
     refresh,
     spellSchool,
-    movement: (p) => (p.race === "Human" ? 1 : 0.85),
+    movement: (p) => (p.race === "Human" ? 1 : 0.85) * (1 + gearBonus(p, "stride") / 100),
   };
 })();

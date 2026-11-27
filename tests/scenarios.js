@@ -583,6 +583,8 @@ function playAutoFight() {
     Object.assign(b.units[unit], {x:2,y:2});
     const foe = b.units.find(v => v.enemy);
     Object.assign(foe, {x:8,y:2});
+    const companion = b.units.find(v => !v.enemy && v.index === 1);
+    Object.assign(companion, {x:5, y:2});
     b.moved = 1;
     const turn = b.index;
     Combat.panel();
@@ -593,9 +595,110 @@ function playAutoFight() {
     else command("battleAction", "switchWeapon");
     check(b.index === turn && b.moved === 1 && p.weapon === "longbow" &&
       UI.$("modal-body").innerHTML.includes(rangedTarget), "switch immediately updates targets and preserves movement");
+    const logLength = b.log.length;
     command("battleTarget", "8,2");
-    check(b.log.some(line => line.includes(p.name) && /hits|misses/.test(line)), "attack with the bow on the same turn");
+    check(b.log.slice(logLength).some(line => line.startsWith(p.name) && /(?:hits|misses) Cellar Rat/.test(line)),
+      "archer attacks the foe through the intervening companion on the same turn");
     Game.setState(JSON.parse(reset)); UI.close();
+  });
+  step("Attack sight can pass through a narrow opening from the attacker's square", () => {
+    let grid = [".........", ".#..#....", ".........", ".........", "........."];
+    let a = {x:0, y:0}, b = {x:8, y:4};
+    for (let turn = 0; turn < 4; turn++) {
+      check(!Battlefield.visible(grid, a, b), "center ray blocked");
+      check(Battlefield.attackVisible(grid, a, b), "opening visible from part of the attacker square");
+      check(!Battlefield.attackVisible(grid, b, a), "reverse shot cannot see the original attacker's center");
+      const rotate = p => ({x:grid.length - 1 - p.y, y:p.x});
+      a = rotate(a); b = rotate(b);
+      grid = Array.from(grid[0], (_, x) => grid.map(row => row[x]).reverse().join(""));
+    }
+    check(!Battlefield.attackVisible(["..#..", "..#..", "..#.."], {x:0,y:1}, {x:4,y:1}),
+      "solid wall blocks every ray");
+  });
+  step("Melee attacks reach all eight adjacent squares", () => {
+    Game.setState(JSON.parse(reset));
+    state().combatAnimations = false;
+    Combat.begin("cellar_rat", "test/melee-reach");
+    const b = state().battle, fighter = b.units.findIndex(u => !u.enemy && u.index === 0);
+    const foe = b.units.find(u => u.enemy);
+    b.index = b.order.indexOf(fighter);
+    Object.assign(b.units[fighter], {x:1, y:1});
+    b.field.grid = ["....", "....", "....", "...."];
+    for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) {
+      if (x === 1 && y === 1) continue;
+      Object.assign(foe, {x, y});
+      Combat.panel();
+      check(UI.$("modal-body").innerHTML.includes('data-act="battleTarget" data-arg="' + x + ',' + y + '"'),
+        "adjacent foe selectable at " + x + "," + y);
+    }
+    b.field.grid = ["....", "..#.", ".#..", "...."];
+    Combat.panel();
+    check(!Battlefield.visible(b.field.grid, b.units[fighter], foe), "corner blocks sight");
+    command("battleTarget", "2,2");
+    check(b.log.some(line => line.startsWith(state().party[0].name) && /hits|misses/.test(line)),
+      "melee strike across a blocked diagonal resolves");
+  });
+  step("Wearables occupy body slots and preserve their effects, owner and charges", () => {
+    Game.setState(JSON.parse(reset));
+    const s = state(), fighter = s.party[0], mage = s.party[3];
+    function wear(id, member, slot, charges) {
+      const obj = charges === undefined ? {id} : {id,charges};
+      const index = s.inventory.push(obj) - 1;
+      command("inspect", index);
+      check(UI.$("modal-body").innerHTML.includes('data-act="wear"'), "inspect wearable " + id);
+      command("wear", [index, member, slot].join(","));
+      return obj;
+    }
+    command("wearSlot", "0,feet");
+    check(UI.$("modal-title").textContent.includes("Feet"), "open empty body slot on old character");
+    wear("boots_of_the_unfinished_errand", 0, "feet");
+    check(Rules.movement(fighter) === 1.4, "boots change movement");
+    const ac = Rules.ac(fighter);
+    wear("applewood_buckler", 0, "offhand");
+    check(Rules.ac(fighter) === ac - 1, "shield protects sword hand");
+    fighter.alternateWeapon = "shortbow";
+    command("switchWeapon", 0);
+    check(Rules.ac(fighter) === ac, "shield slung when bow readied");
+    wear("armlets_of_the_glass_citadel", 3, "wrists");
+    check(Rules.ac(mage) === 3, "unarmoured mage uses bracers");
+    const robe = s.inventory.push({id:"inkkeeper_s_smock"}) - 1;
+    command("wearSlot", "3,torso");
+    command("equip", robe + ",3,torso");
+    check(mage.armour === "inkkeeper_s_smock" && Rules.ac(mage) === 9 && Rules.gearBonus(mage,"search") === 8,
+      "robe occupies torso and suppresses bracer AC");
+    command("unwear", "3,torso");
+    check(Rules.ac(mage) === 3, "removing robe restores bracers");
+    const finite = wear("tinner_s_band", 3, "leftRing", 2);
+    wear("ring_of_the_waking_hound", 3, "rightRing");
+    wear("ring_of_the_empty_scabbard", 3, "leftRing");
+    check(s.inventory.includes(finite) && finite.charges === 2 && Rules.gearBonus(mage,"initiative") === 2,
+      "replacing one ring preserves other ring and old charges");
+    wear("locket_of_the_third_sister", 3, "neck");
+    s.combatAnimations = false;
+    Combat.begin("cellar_rat", "test/worn-healing");
+    const b = s.battle, caster = b.units.findIndex(u => !u.enemy && u.index === 3);
+    b.index = b.order.indexOf(caster);
+    mage.hp = 1;
+    command("battleAction", "items");
+    check(UI.$("modal-body").innerHTML.includes('data-arg="neck"'), "worn power appears in combat items");
+    command("battleItem", "neck");
+    command("battleTarget", b.units[caster].x + "," + b.units[caster].y);
+    check(mage.hp > 1 && mage.worn.neck.charges === 0, "cast from worn locket and keep depleted relic");
+    s.battle = null;
+    command("exportParty");
+    const transfer = UI.$("party-json").value;
+    command("importParty");
+    UI.$("party-json").value = transfer;
+    command("replaceParty");
+    command("slotLoad", "auto");
+    const restored = state().party[3];
+    check(restored.worn.neck.charges === 0 && restored.worn.rightRing.id === "ring_of_the_waking_hound",
+      "portable roster and autosave retain equipped gear");
+    command("rest", "once");
+    check(restored.worn.neck.charges === 1, "rest renews worn locket");
+    command("unwear", "3,neck");
+    check(!restored.worn.neck && state().inventory.some(o => o.id === "locket_of_the_third_sister" && o.charges === 1),
+      "unequipping retains renewed charge");
   });
   Game.setState(JSON.parse(reset));
   Game.finish();

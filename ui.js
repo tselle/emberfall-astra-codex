@@ -112,7 +112,11 @@ const UI = (() => {
       .join("");
     document.addEventListener("click", (e) => {
       let b = e.target.closest("[data-act]");
-      if (b && !b.disabled) Game.act(b.dataset.act, b.dataset.arg, b);
+      if (!b || b.disabled) return;
+      // A pointer command must release focus before a dialog remembers its opener.
+      // Keyboard activations have detail 0 and retain their native button focus.
+      if (e.detail > 0 && b === document.activeElement && b.matches("button")) b.blur();
+      Game.act(b.dataset.act, b.dataset.arg, b);
     });
     $("dialog").addEventListener("cancel", (e) => {
       e.preventDefault();

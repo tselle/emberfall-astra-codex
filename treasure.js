@@ -161,10 +161,10 @@ Z 20:1d3x1000 25:1d4x1000 25:1d4x1000 30:1d4x1000 30:1d6x100 55:10d6 50:5d6 50:3
     const floor = Math.max(1, level - 6);
     let pool = Data.items.filter(
       (i) =>
-        i.type === category &&
+        (i.type === category || (category === "charm" && i.type === "wearable")) &&
         i.level >= floor &&
         i.level <= ceiling &&
-        (!(category === "weapon" || category === "armour") || i.bonus > 0),
+        (!(category === "weapon" || category === "armour") || i.bonus > 0 || i.robe),
     );
     if (!pool.length) pool = Data.items.filter((i) => i.type === category && i.level <= ceiling);
     return choose(pool, rng).id;

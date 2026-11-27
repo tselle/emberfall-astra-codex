@@ -10,7 +10,8 @@ const Watch = (() => {
     for (let p of targets) {
       let harm = Rules.roll(4) + s.floor + Math.ceil(Game.world.adventure.range[0] / 2);
       if (Rules.roll(20) >= Rules.saves(p)[t.type === "gas" ? 0 : 3]) harm = Math.ceil(harm / 2);
-      p.hp = Math.max(0, p.hp - harm);
+      if (t.type === "gas" && Rules.gearBonus(p, "gasWard")) harm = 0;
+      p.hp = Math.max(0, p.hp - Math.max(0, harm - Rules.gearBonus(p, "trapGuard")));
     }
     Game.note("A " + t.type + " trap strikes " + (all ? "the company" : targets[0].name) + ".", "story");
   }
@@ -23,6 +24,7 @@ const Watch = (() => {
     let found = 0;
     let scout = s.party.find((p) => p.hp > 0 && p.cls === "Thief");
     let skill = s.party.some((p) => p.hp > 0 && (p.race === "Dwarf" || p.cls === "Thief")) ? 0.86 : 0.48;
+    skill += Math.max(0, ...s.party.filter(p => p.hp > 0).map(p => Rules.gearBonus(p, "search"))) / 100;
     let trapChance = scout ? Rules.skills(scout)["Find traps"] / 100 : 0.2;
     for (let [x, y] of Game.level.doors || []) {
       let k = Game.tileKey(x, y);
@@ -94,8 +96,12 @@ const Watch = (() => {
         }
       for (let p of s.party)
         if (p.hp > 0) {
-          p.hp = Math.min(p.maxHp, p.hp + Math.max(1, Math.floor(p.level / 3)));
+          p.hp = Math.min(p.maxHp, p.hp + Math.max(1, Math.floor(p.level / 3)) + Rules.gearBonus(p, "restHeal"));
           Rules.refresh(p);
+          for (const obj of Object.values(p.worn || {})) {
+            const it = Data.item(obj.id);
+            if (it.rechargeable) obj.charges = it.charges;
+          }
         }
       n++;
       s.minutes += 480;
