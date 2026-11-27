@@ -9,6 +9,22 @@ const Rules = (() => {
     "Half-elf": ["Fighter", "Ranger", "Mage", "Cleric", "Thief"],
     Halfling: ["Fighter", "Cleric", "Thief"],
   };
+  const raceModifiers = {
+    Human: {},
+    Dwarf: { Constitution: 1, Charisma: -1 },
+    Elf: { Dexterity: 1, Constitution: -1 },
+    Gnome: { Intelligence: 1, Wisdom: -1 },
+    "Half-elf": {},
+    Halfling: { Dexterity: 1, Strength: -1 },
+  };
+  function abilityScores(rolls, cls, race) {
+    return rolls.map((roll, i) =>
+      Math.max(minimums[cls][i], roll + (raceModifiers[race][abilities[i]] || 0)));
+  }
+  function modifierSummary(race) {
+    return Object.entries(raceModifiers[race]).map(([ability, value]) =>
+      (value > 0 ? "+" : "") + value + " " + ability).join(", ") || "None";
+  }
   const alignments = [
     "Lawful good",
     "Neutral good",
@@ -229,7 +245,7 @@ const Rules = (() => {
     );
   function create(name, cls, race, portrait = 0, level = 1, customStats = null, alignment = null) {
     let stats = customStats || [14, 13, 14, 12, 12, 13].map((v, i) => (prime[cls].includes(i) ? 16 : v));
-    stats = stats.map((v, i) => Math.max(minimums[cls][i], v));
+    stats = abilityScores(stats, cls, race);
     let hp = dice[cls] + Math.max(0, stats[2] - 14) + (level - 1) * (Math.ceil(dice[cls] / 2) + 1);
     let p = {
       name,
@@ -297,6 +313,15 @@ const Rules = (() => {
     p.hp += n;
     refresh(p);
   }
+  const elfWeapons = ["longsword", "shortsword", "longbow", "shortbow"];
+  function racialAttackBonus(p, weapon) {
+    return p?.race === "Elf" && elfWeapons.includes(weapon?.base) ? 1 : 0;
+  }
+  function switchWeapon(p) {
+    if (!p?.alternateWeapon) return false;
+    [p.weapon, p.alternateWeapon] = [p.alternateWeapon, p.weapon];
+    return true;
+  }
   function canEquip(p, it) {
     if (it.type === "armour") {
       if (p.cls === "Mage") return false;
@@ -348,7 +373,11 @@ const Rules = (() => {
     handsReady,
     layOnHands,
     canEquip,
+    switchWeapon,
+    racialAttackBonus,
     abilities,
+    abilityScores,
+    modifierSummary,
     minimums,
     races,
     alignments,

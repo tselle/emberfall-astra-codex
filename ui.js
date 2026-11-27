@@ -47,6 +47,12 @@ const UI = (() => {
     (shortcut ? "<kbd>" + esc(shortcut.toUpperCase()) + "</kbd> " : "") +
     esc(label) +
     "</button>";
+  function partyOrder(index, size) {
+    return '<div class="btns" role="group" aria-label="Party order"><span>Party position ' +
+      (index + 1) + " of " + size + "</span>" +
+      btn("↑ Move up", "order", index + ",-1", index === 0) +
+      btn("↓ Move down", "order", index + ",1", index === size - 1) + "</div>";
+  }
   function init() {
     document.querySelectorAll("[data-icon]").forEach((el) => (el.innerHTML = icon(el.dataset.icon)));
     const g = $("sigil").getContext("2d");
@@ -326,9 +332,9 @@ const UI = (() => {
         ]
           .map(([k, v]) => '<div class="keyline"><kbd>' + k + "</kbd>" + v + "</div>")
           .join("") +
-        "<p>Press the keys printed beside dialog controls in order. Field shortcuts focus the field for editing. Choose Move to show the touch controls. In battle, choose an action and select a highlighted square. Lower armour class is stronger. Choose Auto-fight to let the company finish an encounter.</p><h3>Spells and equipment</h3><p>Inspect a scroll in Inventory and choose Learn for a mage. On a character sheet, use +1 and −1 to assign spell copies by circle. Rest to memorize them. Choose Cast beside a ready healing spell to heal a companion. Equipped weapons determine attack range. Dropped items stay at your current coordinates.</p><h3>Commissions and advancement</h3><p>Claim rewards in the warden’s hall. The company shares a quarter of the listed quest experience. Visit the training hall with sufficient experience and 100 gp per new level. Temples can recall fallen adventurers.</p>",
+        "<p>Press the keys printed beside dialog controls in order. Field shortcuts focus the field for editing. Choose Move to show the touch controls. In battle, choose an action and select a highlighted square. Lower armour class is stronger. Choose Auto-fight to let the company finish an encounter. Choose Auto this turn to automate one combatant’s turn. Cycle Auto spells through Yes (cast automatically), No (save prepared spells), and Ask (approve or skip each proposed cast).</p><h3>Spells and equipment</h3><p>Inspect a scroll in Inventory and choose Learn for a mage. On a character sheet, use +1 and −1 to assign spell copies by circle. Rest to memorize them. Choose Cast beside a ready healing spell to heal a companion. Equip a melee weapon and a missile weapon from Inventory to carry both. Switch on the character sheet or during your turn. Switching leaves movement and the attack available. Dropped items stay at your current coordinates.</p><h3>Commissions and advancement</h3><p>Claim rewards in the warden’s hall. The company shares a quarter of the listed quest experience. Visit the training hall with sufficient experience and 100 gp per new level. Temples can recall fallen adventurers.</p>",
       "Field guide",
     );
   }
-  return { $, esc, btn, icon, init, dialogKey, modal, close, time, paint, help };
+  return { $, esc, btn, icon, partyOrder, init, dialogKey, modal, close, time, paint, help };
 })();

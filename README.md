@@ -23,13 +23,14 @@ The opening company is ready for play. **Game menu → Create company** lets you
 | Character sheets | 1–6 |
 | Game menu / close panel | Esc |
 
-**Move** toggles the on-screen movement pad. The pad starts open on touch devices. You can also swipe the scene to move or turn. In combat, select an action and a square on the field. Named target buttons provide another way to choose a creature. **Auto-fight** resolves the encounter for the company.
+**Move** toggles the on-screen movement pad. The pad starts open on touch devices. You can also swipe the scene to move or turn. In combat, select an action and a square on the field. Named target buttons provide another way to choose a creature. **Auto-fight** resolves the encounter for the company. Choose Auto this turn to automate one combatant’s turn. Cycle Auto spells through Yes (cast automatically), No (save prepared spells), and Ask (approve or skip each proposed cast).
 
 ## Company and campaign
 
 - Six races and six classes use six ability scores, descending armour class, THAC0, five saving throws, class experience tables and advancement through level 20. Eligible characters receive a prime-requisite experience bonus. Training costs 100 gp times the new level.
 - Inspect a character to view equipment, specialization, thief skills and memorized spells. A mage learns from wizard scrolls in the pack. Choose spells to prepare on the sheet and rest to refill slots. Potions, scrolls, wands and other charged gear are available through **Item** in battle.
 - Search adjacent squares for secrets and traps. Face a marked trap and interact to attempt removal with a thief. Thieves can enable creeping from their character sheet. Listening can reveal an ambush.
+- Ordinary encounters award the personal treasure of defeated enemies. Fleeing enemies take their purses with them. Wilderness lairs and final guardians can also yield one shared hoard. Small coins accumulate toward the next gold piece (20 sp or 200 cp).
 - Found treasure grants 1 base XP per gp of value, including coins, appraised valuables and the listed price of recovered items. The pool is split among surviving companions before prime-requisite bonuses. Picking up previously dropped gear does not award XP.
 - Resting uses healing prayers, restores spell slots and relieves fatigue. A temple can revive the fallen. Items dropped from the shared pack remain on that square.
 - Each adventure has two commissions. Return to its giver for gold and one quarter of the listed experience, split among living companions. Holy sites award experience separately. Side commissions unlock a wilderness postern.

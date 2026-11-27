@@ -45,8 +45,34 @@ function playAutoFight() {
     command("slotLoad", 1);
     check(state().dir === 1, "saved heading");
   });
+  step("Party order controls move the selected character and autosave the roster", () => {
+    const snapshot = JSON.stringify(state()), party = state().party.slice();
+    command("sheet", 0);
+    function clickOrder(arg) {
+      if (typeof HTMLButtonElement !== "undefined") {
+        document.querySelector('[data-act="order"][data-arg="' + arg + '"]').click();
+      } else command("order", arg);
+    }
+    clickOrder("0,-1");
+    check(state().party[0] === party[0], "first character stays at the front");
+    clickOrder("0,1");
+    check(state().party[0] === party[1] && state().party[1] === party[0], "adjacent members swapped");
+    check(UI.$("modal-title").textContent === party[0].name, "sheet follows moved character");
+    if (typeof HTMLButtonElement !== "undefined") {
+      check(document.querySelector("#roster .member-name").textContent.includes(party[1].name), "roster repaints");
+    }
+    command("slotLoad", "auto");
+    check(state().party[1].name === party[0].name, "autosave restores order");
+    command("sheet", 1);
+    clickOrder("1,-1");
+    check(state().party[0].name === party[0].name, "move up restores original leader");
+    Game.setState(JSON.parse(snapshot)); UI.close(); Game.finish();
+  });
   step("Company builder and standalone adventure levels", () => {
     command("create", "E2");
+    UI.$("char-race").onchange({ target: { value: "Dwarf" } });
+    const preview = UI.$("modal-body").innerHTML;
+    check(preview.includes("+1 Constitution, -1 Charisma"), "builder explains racial modifiers");
     UI.$("char-name").oninput({ target: { value: "Aster" } });
     command("addDraft");
     command("startDraft");
@@ -55,6 +81,38 @@ function playAutoFight() {
       state().party.length === 1 && state().party[0].name === "Aster" && state().party[0].level === 3,
       "custom company",
     );
+    state().party[0].stats.forEach((score, i) =>
+      check(preview.includes(Rules.abilities[i].slice(0, 3) + " " + score + "</span>"), "builder matches recruit"));
+    Game.setState(JSON.parse(reset));
+    Game.finish();
+  });
+  step("Racial ability adjustments apply once across creation and save loads", () => {
+    const expected = {
+      Human: [12,12,12,12,12,12], "Half-elf": [12,12,12,12,12,12],
+      Dwarf: [12,12,13,12,12,11], Elf: [12,13,11,12,12,12],
+      Gnome: [12,12,12,13,11,12], Halfling: [11,13,12,12,12,12],
+    };
+    for (const [race, scores] of Object.entries(expected)) {
+      const recruit = Rules.create("Tester", "Fighter", race, 0, 1, Array(6).fill(12));
+      check(String(recruit.stats) === String(scores), race + " ability scores");
+    }
+    for (const weapon of Data.items.filter(it => it.type === "weapon")) {
+      const eligible = ["longsword", "shortsword", "longbow", "shortbow"].includes(weapon.base);
+      check(Rules.racialAttackBonus({race:"Elf"}, weapon) === Number(eligible), "elf attack bonus for " + weapon.name);
+      check(Rules.racialAttackBonus({race:"Half-elf"}, weapon) === 0, "half-elf attack bonus for " + weapon.name);
+    }
+    const legacy = JSON.parse(reset);
+    legacy.version = 1;
+    const cleric = legacy.party.find(p => p.race === "Dwarf");
+    cleric.stats = [14,13,14,12,16,13];
+    cleric.maxHp = 8;
+    cleric.hp = 5;
+    Game.setState(legacy);
+    check(cleric.stats[2] === 15 && cleric.stats[5] === 12 &&
+      cleric.hp === 6 && cleric.maxHp === 9, "legacy dwarf retains wounds");
+    const migrated = JSON.stringify(state());
+    Game.setState(JSON.parse(migrated));
+    check(JSON.stringify(state()) === migrated, "reload keeps migrated scores");
     Game.setState(JSON.parse(reset));
     Game.finish();
   });
@@ -252,6 +310,42 @@ function playAutoFight() {
       Game.setState(JSON.parse(snapshot)); UI.close(); Game.finish();
     }
   });
+  step("Encounter treasure distinguishes purses, fleeing foes and shared lairs", () => {
+    const snapshot = JSON.stringify(state()), random = Math.random, original = Treasure.roll;
+    const rolled = [];
+    try {
+      Treasure.roll = type => {
+        rolled.push(type);
+        return {gold:0, copper:type === "K" ? 30 : 0, items:[], valuables:[]};
+      };
+      function victory(monster, id, kills, chance) {
+        Game.setState(JSON.parse(snapshot));
+        state().combatAnimations = false;
+        Math.random = () => 0.5;
+        Combat.begin(monster, id);
+        const battle = state().battle;
+        const enemies = battle.units.filter(u => u.enemy);
+        check(enemies.length >= kills, "fixture has enough enemies");
+        enemies.forEach((u, i) => { if (i < kills) u.hp = 0; else u.fled = true; });
+        rolled.length = 0;
+        Math.random = () => chance;
+        command("battleAction", "wait");
+        check(!state().battle, "victory resolved");
+        return rolled.join(",");
+      }
+      check(victory("goblin", "road/123", 1, 0) === "K", "only defeated goblin drops silver");
+      check(state().purseCopper === 30, "sub-gp silver is retained");
+      check(victory("goblin", "road/123", 0, 0) === "", "fleeing patrol retains its purses");
+      check(victory("skeleton", "test/guard", 1, 0) === "", "skeleton has no treasure");
+      const lair = state().id + "/lair";
+      check(victory("goblin", lair, 2, 0) === "K,K,C", "two purses and one shared hoard");
+      check(victory("goblin", lair, 2, .99) === "K,K", "small lair may have no hoard");
+    } finally {
+      Treasure.roll = original;
+      Math.random = random;
+      Game.setState(JSON.parse(snapshot)); UI.close(); Game.finish();
+    }
+  });
   step("Loot shares its full appraised value only among survivors", () => {
     const snapshot = JSON.stringify(state()), original = Treasure.roll;
     try {
@@ -388,6 +482,84 @@ function playAutoFight() {
     command("pad");
     check(state().pad !== previousPad, "touch pad");
     command("pad");
+  });
+  step("Auto this turn honors Yes, No and Ask before spending a prepared spell", () => {
+    Game.setState(JSON.parse(reset));
+    state().combatAnimations = false;
+    Combat.begin("cellar_rat", "test/auto-spells");
+    const b = state().battle;
+    const caster = b.units.findIndex(v => !v.enemy && state().party[v.index].cls === "Mage");
+    const mage = state().party[b.units[caster].index];
+    const foe = b.units.find(v => v.enemy);
+    b.field.grid = Array(14).fill(".".repeat(18));
+    b.units[caster].x = 2;
+    b.units[caster].y = 2;
+    foe.x = 3;
+    foe.y = 2;
+    foe.hp = 1000;
+    mage.ready = {magic_missile:4};
+    b.order = [caster, b.units.findIndex(v => !v.enemy && v !== b.units[caster])];
+    const original = globalThis.setTimeout;
+    const queue = [];
+    globalThis.setTimeout = fn => queue.push(fn);
+    try {
+      for (const decision of ["yes", "no", "skip", "cast"]) {
+        b.index = 0;
+        b.started = false;
+        if (decision === "no" || decision === "skip") command("battleAutoSpells");
+        const before = mage.ready.magic_missile;
+        command("battleAction", "autoTurn");
+        check(queue.length === 1, "one scheduled turn");
+        queue.shift()();
+        if (decision === "skip" || decision === "cast") {
+          Combat.panel();
+          check(b.proposedSpell?.id === "magic_missile" && mage.ready.magic_missile === before &&
+            !queue.length && UI.$("modal-body").innerHTML.includes("Skip spell"), "ask pauses before spending");
+          command("battleDecideSpell", decision);
+        }
+        check(!b.auto && b.index === 1 && !queue.length, "manual control resumes");
+        check(mage.ready.magic_missile === before - Number(decision === "yes" || decision === "cast"), "spell expenditure");
+      }
+    } finally {
+      globalThis.setTimeout = original;
+    }
+  });
+  step("Melee and missile weapons stay with their owner and switch within a turn", () => {
+    Game.setState(JSON.parse(reset));
+    function equip(id) {
+      const index = state().inventory.push({id}) - 1;
+      command("equip", index + ",0");
+    }
+    equip("shortbow");
+    equip("longbow");
+    const fighter = state().party[0];
+    check(fighter.weapon === "longbow" && fighter.alternateWeapon === "longsword" &&
+      state().inventory.some(it => it.id === "shortbow"), "new bow replaces only the previous bow");
+    command("switchWeapon", 0);
+    command("slotLoad", "auto");
+    const p = state().party[0];
+    check(p.weapon === "longsword" && p.alternateWeapon === "longbow", "both weapons survive save and load");
+    state().combatAnimations = false;
+    Combat.begin("cellar_rat", "test/weapon-switch");
+    const b = state().battle, unit = b.units.findIndex(v => !v.enemy && v.index === 0);
+    b.index = b.order.indexOf(unit);
+    b.field.grid = Array(14).fill(".".repeat(18));
+    Object.assign(b.units[unit], {x:2,y:2});
+    const foe = b.units.find(v => v.enemy);
+    Object.assign(foe, {x:8,y:2});
+    b.moved = 1;
+    const turn = b.index;
+    Combat.panel();
+    const rangedTarget = 'data-act="battleTarget" data-arg="8,2"';
+    check(!UI.$("modal-body").innerHTML.includes(rangedTarget), "sword cannot reach distant foe");
+    if (typeof HTMLButtonElement !== "undefined")
+      document.querySelector('[data-act="battleAction"][data-arg="switchWeapon"]').click();
+    else command("battleAction", "switchWeapon");
+    check(b.index === turn && b.moved === 1 && p.weapon === "longbow" &&
+      UI.$("modal-body").innerHTML.includes(rangedTarget), "switch immediately updates targets and preserves movement");
+    command("battleTarget", "8,2");
+    check(b.log.some(line => line.includes(p.name) && /hits|misses/.test(line)), "attack with the bow on the same turn");
+    Game.setState(JSON.parse(reset)); UI.close();
   });
   Game.setState(JSON.parse(reset));
   Game.finish();

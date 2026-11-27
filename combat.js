@@ -239,9 +239,11 @@ const Combat = (() => {
     return B().moved === true ? 0 : Math.max(0, budget - (B().moved || 0));
   }
   function path(u) {
-    const occupied = new Set(B().units.filter(v => v !== u && (alive(v) || downed(v))).map(v => v.y * W + v.x));
+    const occupied = new Set(B().units.filter(v => v !== u && alive(v)).map(v => v.y * W + v.x));
     const allies = new Set(B().units.filter(v => !u.enemy && !v.enemy && alive(v)).map(v => v.y * W + v.x));
-    return Battlefield.flood(grid(), {x:u.x,y:u.y}, movementLeft(u), occupied, allies);
+    const fallen = new Set(B().units.filter(downed).map(v => v.y * W + v.x));
+    return Battlefield.flood(grid(), {x:u.x,y:u.y}, movementLeft(u), occupied, allies)
+      .filter(tile => !fallen.has(tile.y * W + tile.x));
   }
   function strike(u, v) {
     let m = u.enemy ? M(u) : null,
@@ -250,6 +252,7 @@ const Combat = (() => {
       lev = p?.level || m?.level,
       bon =
         (w?.bonus || 0) +
+        Rules.racialAttackBonus(p, w) +
         (p?.specialization && p.specialization === w?.base ? 1 : 0) +
         (p?.cls === "Ranger" ? 1 : 0) +
         (p ? Math.max(0, p.stats[w?.missile ? 1 : 0] - 15) : 0);
@@ -307,8 +310,8 @@ const Combat = (() => {
       u.extra = false;
     }
   }
-  function range(u) {
-    const n = u.enemy ? (M(u).special.includes("missile") ? 7 : 1) : Data.item(P(u).weapon)?.range || 1;
+  function range(u, weapon = P(u)?.weapon) {
+    const n = u.enemy ? (M(u).special.includes("missile") ? 7 : 1) : Data.item(weapon)?.range || 1;
     return n > 1 ? n * scale() : n;
   }
   function touchTarget(u, v) {
@@ -320,7 +323,7 @@ const Combat = (() => {
     if (amount) log(name(u) + " uses Lay on Hands on " + name(v) + ", restoring " + amount + " HP.");
     return amount > 0;
   }
-  function automated(u) {
+  function automated(u, allowSpells = true) {
     let b = B(),
       foes = b.units
         .filter((v) => v.enemy !== u.enemy && alive(v))
@@ -357,11 +360,21 @@ const Combat = (() => {
         sp =
           ready.find((v) => ally && v.effect === "heal" && reaches(u, ally, v.range * scale())) ||
           ready.find((v) => v.effect === "damage" && reaches(u, target, v.range * scale()));
-      if (sp) {
-        cast(u, sp, sp.effect === "heal" ? ally : target);
+      if (sp && allowSpells && S().autoSpells !== "no") {
+        const recipient = sp.effect === "heal" ? ally : target;
+        if (S().autoSpells === "ask") {
+          b.proposedSpell = {id:sp.id, target:b.units.indexOf(recipient)};
+          return;
+        }
+        cast(u, sp, recipient);
         P(u).ready[sp.id]--;
         return;
       }
+    }
+    if (!u.enemy && P(u).alternateWeapon) {
+      const spare = Data.item(P(u).alternateWeapon);
+      if (foes.some(v => reaches(u, v, range(u, spare.id))) &&
+          (!spare.missile || !foes.some(v => reaches(u, v, range(u))))) Rules.switchWeapon(P(u));
     }
     const inReach = foes.find(v => reaches(u, v, range(u)));
     if (inReach) {
@@ -439,7 +452,16 @@ const Combat = (() => {
     for (let u of friends) Rules.gain(P(u), xp);
     S().cleared[b.id] = true;
     S().battle = null;
-    const treasureXP = Game.loot(Monsters.get(b.monster).treasure);
+    const treasure = dead.flatMap(u => M(u).carriedTreasure);
+    if (b.boss || b.id === S().id + "/lair") {
+      const monster = Monsters.get(b.monster);
+      const groupSize = b.units.filter(u => u.enemy).length;
+      for (const type of monster.lairTreasure) {
+        if (groupSize >= monster.meanAppearing || Math.random() < groupSize / monster.meanAppearing)
+          treasure.push(type);
+      }
+    }
+    const treasureXP = Game.loot(treasure);
     Game.note("Victory. Each survivor earns " + xp + " XP.", "good");
     if (b.boss) Game.record("The final guardian of " + Game.world.adventure.place + " is defeated.");
     UI.modal(
@@ -500,6 +522,7 @@ const Combat = (() => {
   function next() {
     let b = B();
     b.resolved = false;
+    if (b.auto === "turn") b.auto = false;
     b.index++;
     b.moved = 0;
     b.mode = "attack";
@@ -545,6 +568,11 @@ const Combat = (() => {
         return;
       }
       automated(u);
+      if (b.proposedSpell) {
+        Game.save();
+        panel();
+        return;
+      }
       if (playAttack()) return;
       next();
       if (end()) return;
@@ -800,8 +828,10 @@ const Combat = (() => {
         [b.moved ? "End turn" : "Wait", "wait", "5"],
         ["Flee", "flee", "6"],
         ["Auto-fight", "auto", "7"],
+        ["Auto this turn", "autoTurn", "92"],
       ];
     if (p && (p.cls === "Cleric" || (p.cls === "Paladin" && p.level >= 3))) modes.push(["Turn undead", "turn", "8"]);
+    if (p?.alternateWeapon) modes.push(["Switch to " + Data.item(p.alternateWeapon).name, "switchWeapon", "93"]);
     if (p?.cls === "Paladin") modes.push(["Lay on Hands", "hands", "91"]);
     const buttons = (b.auto || b.resolved ? [] : modes)
       .map(([n, k, key]) =>
@@ -866,6 +896,13 @@ const Combat = (() => {
               )
               .join("")
           : "";
+    if (b.proposedSpell) {
+      const proposal = b.proposedSpell;
+      instruction = UI.esc(name(u) + " wants to cast " + Data.spell(proposal.id).name +
+        " on " + name(b.units[proposal.target]) + ".");
+      choices = UI.btn("Cast spell", "battleDecideSpell", "cast") +
+        UI.btn("Skip spell", "battleDecideSpell", "skip");
+    }
     let targets = b.units.filter(v => {
       if (b.auto || b.resolved || !spellRecipient(v, selectedSpell)) return false;
       if (b.mode === "attack") return v.enemy && reaches(u, v, range(u));
@@ -887,7 +924,9 @@ const Combat = (() => {
         (b.auto ? "" : ' tabindex="0"') + '></canvas></div><aside class="combat-roster" aria-label="Combatants"><h3>Combatants</h3>' +
         roster + '<p id="unit-description"></p></aside></div>' +
         Journal.recentRolls(b) + (b.auto ? "" : "<small>Press shortcut digits in order. Arrow keys select a square. Enter confirms.</small>") + '<p class="muted">' + UI.esc(symbols.join(" · ")) + '</p><div class="btns">' +
-        buttons + (!b.resolved ? UI.btn("Attack animations: " + (animationsEnabled() ? "On" : "Off"), "battleAnimations") : "") +
+        buttons + (!b.resolved && !b.proposedSpell ? UI.btn("Auto spells: " +
+          ({yes:"Yes", no:"No", ask:"Ask"}[S().autoSpells] || "Yes"), "battleAutoSpells") : "") +
+        (!b.resolved ? UI.btn("Attack animations: " + (animationsEnabled() ? "On" : "Off"), "battleAnimations") : "") +
         "</div><p>" +
         instruction +
         '</p><div class="choices">' +
@@ -912,7 +951,7 @@ const Combat = (() => {
       row.onpointerleave = () => { hoveredUnit = undefined; render(); };
     }
     render();
-    if (b.auto && !b.resolved && scheduledBattle !== b) {
+    if (b.auto && !b.resolved && !b.proposedSpell && scheduledBattle !== b) {
       scheduledBattle = b;
       Game.save();
       setTimeout(() => {
@@ -925,6 +964,26 @@ const Combat = (() => {
     if (!a.startsWith("battle") || !B()) return false;
     let b = B(),
       u = actor();
+    if (a === "battleAutoSpells" && !b.resolved && !b.proposedSpell) {
+      S().autoSpells = ({yes:"no", no:"ask", ask:"yes"})[S().autoSpells] || "no";
+      Game.save();
+      panel();
+      return true;
+    }
+    if (a === "battleDecideSpell") {
+      const proposal = b.proposedSpell;
+      if (!proposal || !["cast", "skip"].includes(arg)) return true;
+      delete b.proposedSpell;
+      if (arg === "cast") {
+        cast(u, Data.spell(proposal.id), b.units[proposal.target]);
+        P(u).ready[proposal.id]--;
+      } else automated(u, false);
+      if (!playAttack()) {
+        next();
+        run();
+      }
+      return true;
+    }
     if (a === "battleAnimations" && !b.resolved) {
       S().combatAnimations = !animationsEnabled();
       Game.save();
@@ -953,8 +1012,16 @@ const Combat = (() => {
       panel();
       return true;
     }
-    if (arg === "auto") {
-      b.auto = true;
+    if (a === "battleAction" && arg === "switchWeapon") {
+      if (!u.enemy && Rules.switchWeapon(P(u))) {
+        b.mode = "attack";
+        b.selection = "";
+        panel();
+      }
+      return true;
+    }
+    if (arg === "auto" || arg === "autoTurn") {
+      b.auto = arg === "autoTurn" ? "turn" : true;
       b.mode = "attack";
       panel();
       return true;

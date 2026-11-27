@@ -11,7 +11,7 @@ const Game = (() => {
     storageOK = true;
   function fresh() {
     return {
-      version: 1,
+      version: 2,
       id: "E0",
       area: "town",
       x: 7,
@@ -40,6 +40,17 @@ const Game = (() => {
   function setState(next) {
     cancelAnimationFrame(anim);
     displayPose = null;
+    if (next.version === 1) {
+      for (const p of next.party) {
+        const scores = Rules.abilityScores(p.stats, p.cls, p.race);
+        // Correct starting HP while preserving earned HP and wounds.
+        const hpChange = Math.max(0, scores[2] - 14) - Math.max(0, p.stats[2] - 14);
+        p.maxHp = Math.max(1, p.maxHp + hpChange);
+        if (p.hp > 0) p.hp = Math.max(1, Math.min(p.maxHp, p.hp + hpChange));
+        p.stats = scores;
+      }
+      next.version = 2;
+    }
     s = next;
     world = Adventures.world(s.id);
     Navpad.show(s.pad);
@@ -77,7 +88,7 @@ const Game = (() => {
     try {
       let v = JSON.parse(localStorage.getItem(prefix + slot));
       if (
-        v?.version === 1 &&
+        [1, 2].includes(v?.version) &&
         Array.isArray(v.party) &&
         v.party.length &&
         Adventures.list.some((a) => a.id === v.id)
@@ -354,17 +365,25 @@ const Game = (() => {
     note(`Treasure worth ${value} gp: ${value} base XP shared among ${survivors.length} surviving companions.`, "good");
     return value;
   }
-  function loot(type) {
-    let drop = Treasure.roll(type, world.adventure.range[0] + s.floor, Math.random);
+  function loot(types) {
+    const drop = {gold: 0, copper: 0, items: [], valuables: []};
+    for (const type of [].concat(types)) {
+      const roll = Treasure.roll(type, world.adventure.range[0] + s.floor, Math.random);
+      drop.gold += roll.gold;
+      drop.copper += roll.copper || 0;
+      drop.items.push(...roll.items);
+      drop.valuables.push(...roll.valuables);
+    }
+    if (!drop.gold && !drop.copper && !drop.items.length) return 0;
+    drop.gold += Math.floor(drop.copper / 200);
+    drop.copper %= 200;
+    const recovered = [drop.gold && drop.gold + " gp", drop.copper && drop.copper + " cp"]
+      .filter(Boolean).concat(drop.items.map(id => Data.item(id).name));
+    const change = (s.purseCopper || 0) + drop.copper;
+    drop.gold += Math.floor(change / 200);
+    s.purseCopper = change % 200;
     const treasureXP = recoverTreasure(drop.gold, drop.items);
-    note(
-      "Recovered " +
-        drop.gold +
-        " gp" +
-        (drop.items.length ? " and " + drop.items.map((id) => Data.item(id).name).join(", ") : "") +
-        ".",
-      "good",
-    );
+    note("Recovered " + recovered.join(", ") + ".", "good");
     if (drop.valuables.length) {
       let preview = drop.valuables.slice(0, 3).join(", ");
       note(
@@ -465,8 +484,12 @@ const Game = (() => {
         p.alignment +
         " · " +
         p.xp +
-        " XP</div></div><h3>Attributes</h3>" +
+        " XP</div></div>" +
+        (s.battle ? "" : UI.partyOrder(i, s.party.length)) +
+        "<h3>Attributes</h3>" +
         fields(Rules.abilities, p.stats) +
+        "<p>Racial ability modifiers · " + Rules.modifierSummary(p.race) + "</p>" +
+        (p.race === "Elf" ? "<p>Elven weapon training grants +1 to hit with longbows, shortbows, longswords and shortswords.</p>" : "") +
         "<h3>Combat</h3>" +
         fields(
           ["HP", "AC", "THAC0", "Movement"],
@@ -482,7 +505,11 @@ const Game = (() => {
         " · " +
         esc(Data.item(p.armour)?.name || "Unarmoured") +
         (p.specialization ? " · Specialized in " + esc(Data.item(p.specialization)?.name) : "") +
-        "</p><h3>Saving throws</h3>" +
+        "</p>" +
+        (p.alternateWeapon && !s.battle ? '<div class="btns">' +
+          btn("Switch to " + Data.item(p.alternateWeapon).name, "switchWeapon", i) +
+          btn("Return " + Data.item(p.alternateWeapon).name + " to pack", "packAlternate", i) + "</div>" : "") +
+        "<h3>Saving throws</h3>" +
         fields(Rules.saveNames, Rules.saves(p)) +
         (p.cls === "Paladin"
           ? "<h3>Lay on Hands</h3><p>Heal yourself or one companion for up to " + 2 * p.level +
@@ -793,6 +820,27 @@ const Game = (() => {
       case "sheet":
         sheet(+arg);
         return;
+      case "order": {
+        const [i, step] = ids.map(Number);
+        const next = i + step;
+        if (s.battle || !Number.isInteger(i) || Math.abs(step) !== 1 || !s.party[i] || !s.party[next]) return;
+        [s.party[i], s.party[next]] = [s.party[next], s.party[i]];
+        sheet(next);
+        finish(false);
+        return;
+      }
+      case "switchWeapon":
+      case "packAlternate": {
+        const p = s.party[+arg];
+        if (s.battle || !p?.alternateWeapon) return;
+        if (action === "switchWeapon") Rules.switchWeapon(p);
+        else {
+          s.inventory.push({id:p.alternateWeapon});
+          delete p.alternateWeapon;
+        }
+        sheet(+arg);
+        break;
+      }
       case "layOnHands": {
         if (s.battle) return;
         const p = s.party[+ids[0]], ally = s.party[+ids[1]];
@@ -856,10 +904,13 @@ const Game = (() => {
           p = s.party[n],
           it = Data.item(s.inventory[i].id);
         if (action === "equip") {
-          if (!Rules.canEquip(p, it) || p.hp <= 0) return;
+          if (s.battle || !Rules.canEquip(p, it) || p.hp <= 0) return;
           let k = it.type;
           s.inventory.splice(i, 1);
-          if (p[k]) s.inventory.push({ id: p[k] });
+          if (k === "weapon" && p.weapon && Data.item(p.weapon).missile !== it.missile) {
+            if (p.alternateWeapon) s.inventory.push({id:p.alternateWeapon});
+            p.alternateWeapon = p.weapon;
+          } else if (p[k]) s.inventory.push({ id: p[k] });
           p[k] = it.id;
         } else if (action === "learn") {
           if (!p.book.includes(it.spell)) {

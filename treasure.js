@@ -5,32 +5,32 @@ var Treasure = (() => {
   "use strict";
   const tables = {};
   const rows = `
-A 25:1d6x1000 30:1d6x1000 25:1d4x1000 35:2d6x1000 20:1d4x100 55:3d10 45:2d6 30:1d3
-B 50:1d8x1000 25:1d6x1000 25:1d4x1000 25:1d3x1000 - 30:1d8 20:1d4 10:1d2
-C 20:1d12x1000 30:1d6x1000 10:1d4x1000 - - 25:1d6 20:1d3 10:1d2
-D 10:1d8x1000 15:1d12x1000 15:1d8x1000 55:1d6x1000 - 30:1d10 25:1d6 15:1d3
-E 5:1d10x1000 30:1d12x1000 25:1d6x1000 25:1d8x1000 - 20:1d12 15:1d8 25:1d4
-F - 10:2d8x1000 20:1d8x1000 45:1d12x1000 30:1d4x100 25:2d10 15:1d12 30:1d5
-G - - - 55:5d4x1000 50:1d8x100 35:4d6 30:1d10 35:1d5
-H 25:4d8x1000 40:5d6x1000 40:4d8x1000 55:8d8x1000 25:1d10x100 50:5d8 50:3d8 25:1d6
-I - - - - 30:3d6x100 50:2d10 50:2d8 20:1d2
+A 25:1d6x1000 30:1d6x1000 35:1d6x1000 40:1d10x1000 25:1d4x100 60:4d10 50:3d10 30:3d1
+B 50:1d8x1000 25:1d6x1000 25:1d4x1000 25:1d3x1000 - 30:1d8 20:1d4 10:1d1
+C 20:1d12x1000 30:1d6x1000 10:1d4x1000 - - 25:1d6 20:1d3 10:2d1
+D 10:1d8x1000 15:1d12x1000 15:1d8x1000 50:1d6x1000 - 30:1d10 25:1d6 15:3d1
+E 5:1d10x1000 25:1d12x1000 25:1d6x1000 25:1d8x1000 - 15:1d12 10:1d8 25:4d1
+F - 10:1d20x1000 15:1d12x1000 40:1d10x1000 35:1d8x100 20:3d10 10:1d10 30:5d1
+G - - - 50:10d4x1000 50:1d20x100 30:5d4 25:1d10 35:5d1
+H 25:5d6x1000 40:1d100x1000 40:10d4x1000 55:10d6x1000 25:5d10x100 50:1d100 50:10d4 15:6d1
+I - - - - 30:3d6x100 55:2d10 50:1d12 15:1d1
 J 100:3d8 - - - - - - -
 K - 100:3d6 - - - - - -
 L - - 100:2d6 - - - - -
 M - - - 100:2d4 - - - -
 N - - - - 100:1d6 - - -
-O 25:1d4x100 20:1d3x100 - - - - - -
-P - 30:1d6x100 25:1d3x100 - - - - -
-Q - - - - - 60:1d4 - -
-R - - - 40:2d4x100 50:1d6x100 55:3d6 45:2d6 -
+O 25:1d4x1000 20:1d3x1000 - - - - - -
+P - 30:1d6x1000 25:1d2x1000 - - - - -
+Q - - - - - 50:1d4 - -
+R - - - 40:2d4x1000 50:10d6x100 55:4d8 45:1d12 -
 S - - - - - - - 40:2d4
 T - - - - - - - 50:1d4
 U - - - - - 85:10d8 80:5d6 70:1d4
 V - - - - - - - 85:1d4
-W - - - 60:5d6x1000 - 15:5d8 60:3d8 55:1d4
+W - - - 60:5d6x1000 15:1d8x100 60:10d8 50:5d8 55:1d1
 X - - - - - - - 60:1d2
-Y - - - 75:2d6x1000 - - - -
-Z 25:1d3x1000 25:1d4x1000 25:1d4x1000 30:1d4x1000 30:1d6x100 55:10d6 50:5d6 50:1d4`;
+Y - - - 70:2d6x1000 - - - -
+Z 20:1d3x1000 25:1d4x1000 25:1d4x1000 30:1d4x1000 30:1d6x100 55:10d6 50:5d6 50:3d1`;
   rows
     .trim()
     .split("\n")
@@ -143,9 +143,15 @@ Z 25:1d3x1000 25:1d4x1000 25:1d4x1000 30:1d4x1000 30:1d6x100 55:10d6 50:5d6 50:1
   }
   const magicTypes = ["potion", "scroll", "ring", "wand", "charm", "armour", "weapon"];
   const magicWeights = [21, 38, 43, 53, 66, 80, 100];
-  function magic(type, level, rng) {
+  function magic(type, level, rng, index) {
     const n = die(100, rng);
     let category = magicTypes[magicWeights.findIndex((end) => n <= end)];
+    if (type === "B") category = choose(["armour", "weapon"], rng);
+    if (type === "F" && category === "weapon") category = choose(magicTypes.slice(0, -1), rng);
+    if ((type === "D" && index === 2) || (type === "F" && index === 3) || (type === "H" && index === 4))
+      category = "potion";
+    if ((type === "E" && index === 3) || (type === "F" && index === 4) ||
+        (type === "G" && index === 4) || (type === "H" && index === 5)) category = "scroll";
     if (type === "S") category = "potion";
     if (type === "T") category = "scroll";
     if (type === "X") category = n <= 70 ? "potion" : "charm";
@@ -169,7 +175,9 @@ Z 25:1d3x1000 25:1d4x1000 25:1d4x1000 30:1d4x1000 30:1d6x100 55:10d6 50:5d6 50:1
     const table = tables[type] || tables.C;
     const counts = table.map((entry) => quantity(entry, rng));
     const coins = { cp: counts[0], sp: counts[1], ep: counts[2], gp: counts[3], pp: counts[4] };
-    let gold = Math.round(coins.cp / 100 + coins.sp / 10 + coins.ep / 2 + coins.gp + coins.pp * 5);
+    // First-edition exchange rates: 200 cp = 20 sp = 2 ep = 1 gp.
+    const copper = coins.cp + coins.sp * 10 + coins.ep * 100;
+    let gold = Math.floor(copper / 200) + coins.gp + coins.pp * 5;
     const valuables = [];
     for (let i = 0; i < counts[5] + counts[6]; i++) {
       const value = i < counts[5] ? gemstone(level, rng) : jewel(level, rng);
@@ -177,8 +185,8 @@ Z 25:1d3x1000 25:1d4x1000 25:1d4x1000 30:1d4x1000 30:1d6x100 55:10d6 50:5d6 50:1
       gold += value.value;
     }
     const items = [];
-    for (let i = 0; i < counts[7]; i++) items.push(magic(type, level, rng));
-    return { gold, items, valuables, coins };
+    for (let i = 0; i < counts[7]; i++) items.push(magic(type, level, rng, i));
+    return { gold, copper: copper % 200, items, valuables, coins };
   }
   function shop(level = 1) {
     const band = Math.min(4, Math.floor((Math.max(1, level) - 1) / 4));

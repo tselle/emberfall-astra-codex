@@ -70,9 +70,18 @@ var Monsters = (() => {
     if (/steam|dragon turtle|marid|kraken|mirror|bell|banshee|shrieking|gorgon/i.test(name)) return "#c6cfdb";
     return "#ff9856";
   }
-  function family(kind, treasure, shell, courage, records) {
+  // The optional fields after the description are lair treasure, individual treasure, and mean number appearing.
+  // Multiple types roll independently; Q*5 means five checks on table Q.
+  function treasureTypes(spec) {
+    if (spec === "-") return [];
+    return spec.split(" ").flatMap(token => {
+      const [type, count = 1] = token.split("*");
+      return Array(Number(count)).fill(type);
+    });
+  }
+  function family(kind, defaultLair, shell, courage, records) {
     for (const row of records.trim().split("\n")) {
-      const [name, rank, flags, note] = row.trim().split("|");
+      const [name, rank, flags, note, lair = defaultLair, carried = "-", mean = 1] = row.trim().split("|");
       const id = name
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "_")
@@ -97,7 +106,9 @@ var Monsters = (() => {
         damage: [count, hd < 1 ? 3 : hd < 2 ? 4 : hd > 12 ? 8 : 6],
         xp: Math.max(5, Math.round(14 * hd ** 1.78 + special.length * hd * 12 + resistance * hd * 12)),
         morale: Math.min(20, courage + Math.floor(hd / 4)),
-        treasure,
+        lairTreasure: treasureTypes(lair),
+        meanAppearing: Number(mean),
+        carriedTreasure: treasureTypes(carried),
         special,
         resistance,
         undead,
@@ -111,12 +122,12 @@ var Monsters = (() => {
 
   family(
     "Burrow beast",
-    "K",
+    "-",
     2,
     7,
     `
 Cellar Rat|0.35||One chewed bung can sour a whole season's ale. Its incisors leave twin grooves in the oak.
-Giant Rat|0.5|a|Its nest is a woven raft that rises with the sewer water.
+Giant Rat|0.5|a|Its nest is a woven raft that rises with the sewer water.|C|-|27.5
 Badger|1|u|Long front claws strip earth from its burrow in neat scoops.
 Giant Badger|3|u|Sleepers sometimes wake to whole fence posts rolling into its galleries.
 Weasel|0.5|g|A blood-dark chin gives away a weasel fresh from the henhouse.
@@ -132,13 +143,13 @@ Thornwick Broodmother|2|a|In the grain vault she has braided scraps of every Tho
   );
   family(
     "Woodland beast",
-    "J",
+    "-",
     3,
     9,
     `
 Wolf|2||The pack leaves a single long line of prints as each wolf steps in another's track.
 Dire Wolf|4||Grey shoulders rise higher than a saddle, and the pack runs in silence.
-Winter Wolf|6|bk|Frost collects on the whiskers just before its breath spills out.
+Winter Wolf|6|bk|Frost collects on the whiskers just before its breath spills out.|I|-|5
 Hound|1||A leather collar still circles its neck beneath the bristling fur.
 Wild Dog|1||The leader feints while its littermates circle behind.
 War Hound|2||It goes straight for the shield arm it learned to bite in the kennel.
@@ -168,7 +179,7 @@ Mule|2||It pins its ears and turns its hindquarters toward trouble.
   );
   family(
     "Stalking beast",
-    "J",
+    "-",
     3,
     10,
     `
@@ -189,7 +200,7 @@ Cave Gorilla|7|g|Its heavy footfalls can be felt through a cavern floor.
   );
   family(
     "Winged beast",
-    "J",
+    "-",
     3,
     8,
     `
@@ -203,16 +214,16 @@ Giant Hawk|3|v|Long pinions skim the heath before the talons close.
 Eagle|2|v|Pale flight feathers flash as it tips into a dive.
 Giant Eagle|5|vg|It uses a high ledge as an anvil for hard-shelled prey.
 Owl|1|va|Its first wingbeat scarcely stirs the leaves.
-Giant Owl|4|va|One grey wing could shade a wagon from the sun.
+Giant Owl|4|va|One grey wing could shade a wagon from the sun.|Q*5 X|-|3.5
 Vulture|1|v|Its bare neck turns to follow anything that limps.
 Giant Vulture|4|v|Caravans throw scraps far from the wagons to draw it off.
 Condor|3|v|It rides the warm air rolling up the cliff face.
-Roc|14|vg|The wind under one wing flattens long strips of barley.
+Roc|14|vg|The wind under one wing flattens long strips of barley.|C|-|1.5
 `,
   );
   family(
     "Great herbivore",
-    "J",
+    "-",
     4,
     11,
     `
@@ -228,19 +239,19 @@ Giraffe|5||Its kick reaches further than the sweep of a spear.
   );
   family(
     "Crawler",
-    "O",
+    "-",
     4,
     8,
     `
-Giant Ant|2|g|Its feet beat six parallel tracks into the loam.
+Giant Ant|2|g|Its feet beat six parallel tracks into the loam.|Q*3 S|-|50.5
 Soldier Ant|3|p|A broad coppery head shields the nest entrance.
 Ant Queen|6||Her pale abdomen fills most of the central chamber.
 Giant Bee|1|pv|A golden dusting of pollen clings to its shaggy thorax.
-Giant Wasp|4|pv|It packs its paper nest with still-living prey.
+Giant Wasp|4|pv|It packs its paper nest with still-living prey.|Q*20|-|10.5
 Hornet Swarm|3|pv|The hum climbs by an octave when their nest is disturbed.
 Giant Centipede|0.5|p|Amber legs ripple in the seam under the door.
 Giant Millipede|2|b|When pressed it exudes a bitter cloud around its coils.
-Giant Scorpion|5|pg|Its claws hold the prey steady beneath the poised sting.
+Giant Scorpion|5|pg|Its claws hold the prey steady beneath the poised sting.|D|-|2.5
 Cave Scorpion|3|pa|Nearly clear pincers reach from a crack in the chalk.
 Fire Beetle|1||Two glowing patches stripe its head like a lamp maker's mark.
 Bombardier Beetle|2|b|Its paired wing cases click just before the jet of hot vapour.
@@ -261,7 +272,7 @@ Cave Cricket|1||Its sudden rattling call can fill an entire underground gallery.
   );
   family(
     "Silk hunter",
-    "P",
+    "-",
     3,
     9,
     `
@@ -276,7 +287,7 @@ Thread Widow|7|pwa|Taut threads join the web to every entry in the gallery.
   );
   family(
     "Scaled beast",
-    "K",
+    "-",
     4,
     10,
     `
@@ -304,7 +315,7 @@ Snapping Turtle|3|ag|It waits at the ford with a little pink lure on its tongue.
   );
   family(
     "Water hunter",
-    "L",
+    "-",
     3,
     10,
     `
@@ -323,8 +334,8 @@ Stingray|2|pa|A ripple of sand uncovers the spine on its tail.
 Manta Ray|5||It rises from the sea like a black cloak shaken out.
 Giant Crab|3|g|Its gait pulls deep comb marks through the tidal flats.
 Giant Crayfish|4|g|A red claw reaches through the sluice gate at dusk.
-Giant Octopus|8|c|Its suckers leave rings in wet silt up the harbour wall.
-Giant Squid|10|cg|A length of white arm glides across the moonlit deck.
+Giant Octopus|8|c|Its suckers leave rings in wet silt up the harbour wall.|R|-|2
+Giant Squid|10|cg|A length of white arm glides across the moonlit deck.|A
 Kraken|20|cgb|It has learned to loosen anchor chains before it takes a ship.
 Killer Whale|9||Its white flank rolls upward as it turns under the ice.
 Sperm Whale|15|t|The water draws down around its head as it surfaces.
@@ -333,7 +344,7 @@ Narwhal|5|t|The spiral tusk scratches channels into thick blue ice.
   );
   family(
     "Ancient saurian",
-    "K",
+    "-",
     5,
     12,
     `
@@ -355,43 +366,43 @@ Wingjaw|3|va|It drops from the cliff on narrow folded wings.
     4,
     9,
     `
-Goblin|0.75||Small brass bells sewn into the captain's sash direct the troop.
-Kobold|0.5|a|It taps the flagstones with a stick before each backward step.
-Orc|1||The scarred lip of its shield serves as a striking edge.
-Hobgoblin|2||A square of red cord on each shoulder marks its place in the rank.
-Bugbear|3|a|Soft moss pads cover the buckles on its harness.
-Gnoll|2||It fastens trophies to its spear with bright strips of leather.
-Ogre|4||A millstone serves as the counterweight on its enormous club.
+Goblin|0.75||Small brass bells sewn into the captain's sash direct the troop.|C|K|220
+Kobold|0.5|a|It taps the flagstones with a stick before each backward step.|O Q*5|J|220
+Orc|1||The scarred lip of its shield serves as a striking edge.|C O Q*10 S|L|165
+Hobgoblin|2||A square of red cord on each shoulder marks its place in the rank.|D Q*5|J M|110
+Bugbear|3|a|Soft moss pads cover the buckles on its harness.|B|J K L M|21
+Gnoll|2||It fastens trophies to its spear with bright strips of leather.|D Q*5 S|L M|110
+Ogre|4||A millstone serves as the counterweight on its enormous club.|Q B S|M*10|11
 Ogre Magus|6|isr|It inks new charms across the backs of its broad hands.
-Bandit|1|m|A cheap scarf hides the face beneath a traveller's ordinary cap.
-Brigand|2|m|Its leather coat is patched with strips from captured belts.
-Marauder|3||A row of old toll coins rattles from the blade hilt.
-Outlaw Bowman|3|m|A notched tree marks the range of the outlaw's favourite shot.
-Pirate|2||Tar on the soles gives it a sure footing on wet boards.
-Corsair|4|m|A scrap of captured sailcloth wraps the sword hand.
-Berserker|3||Its shield bears fresh tooth marks along the rim.
-Mercenary|3||Each buckle is oiled, every seam repaired in a different colour.
-Nomad Scout|2|m|The arrows in its case have blunt heads for tracking and barbs for battle.
+Bandit|1|m|A cheap scarf hides the face beneath a traveller's ordinary cap.|A|M|110
+Brigand|2|m|Its leather coat is patched with strips from captured belts.|A|M|110
+Marauder|3||A row of old toll coins rattles from the blade hilt.|A|M|110
+Outlaw Bowman|3|m|A notched tree marks the range of the outlaw's favourite shot.|A|M|110
+Pirate|2||Tar on the soles gives it a sure footing on wet boards.|W|K|175
+Corsair|4|m|A scrap of captured sailcloth wraps the sword hand.|W|K|175
+Berserker|3||Its shield bears fresh tooth marks along the rim.|B|K|55
+Mercenary|3||Each buckle is oiled, every seam repaired in a different colour.|C|M
+Nomad Scout|2|m|The arrows in its case have blunt heads for tracking and barbs for battle.|Z|L
 Cave Hunter|2|a|Chalk outlines on the wall show where it practises its spear cast.
-Lizardfolk|2||A fish-bone comb keeps the crest clear of the spear strap.
-Marsh Troglodyte|3|ba|The bitter scent of crushed garlic precedes its hunting party.
+Lizardfolk|2||A fish-bone comb keeps the crest clear of the spear strap.|D
+Marsh Troglodyte|3|ba|The bitter scent of crushed garlic precedes its hunting party.|A
 Deep Fisher|3|g|Its weighted net can wrap a traveller from boot to shoulder.
 War Toad|4|g|A horn of hollow reed summons its kin across the fen.
 Mire Raider|4|a|Its woven reed sandals leave a heron's track.
 Hill Reaver|5|m|A slingstone is knotted into each loop of the raider's belt.
-Goblin Sapper|2|m|It tests every lintel for space to tuck a powder pot.
-Kobold Trapper|1|a|It always leaves exactly one passage free of footprints.
-Orc Standard Bearer|3||A bronze hook on the banner pole catches an enemy's shield.
-Gnoll Bonecaller|4|s|Its rattle is tuned to the notes of six different birds.
-Hobgoblin Marshal|5||Two fingers against its shield are enough to order a retreat.
-Dwarf Exile|3||Its battle harness still bears the filed outline of a clan badge.
-Elf Waylayer|4|am|A bowstring dyed green vanishes against the tree line.
-Gnome Delver|2|a|It wears a smoky lens on the side facing its lantern.
-Halfling Footpad|1|a|The left boot sole is stitched on backwards to muddle pursuit.
+Goblin Sapper|2|m|It tests every lintel for space to tuck a powder pot.|C|K|220
+Kobold Trapper|1|a|It always leaves exactly one passage free of footprints.|O Q*5|J|220
+Orc Standard Bearer|3||A bronze hook on the banner pole catches an enemy's shield.|C O Q*10 S|L|165
+Gnoll Bonecaller|4|s|Its rattle is tuned to the notes of six different birds.|D Q*5 S|L M|110
+Hobgoblin Marshal|5||Two fingers against its shield are enough to order a retreat.|D Q*5|J M|110
+Dwarf Exile|3||Its battle harness still bears the filed outline of a clan badge.|G Q*20 R|M*5|220
+Elf Waylayer|4|am|A bowstring dyed green vanishes against the tree line.|G S T|N|110
+Gnome Delver|2|a|It wears a smoky lens on the side facing its lantern.|C Q*20|M*3
+Halfling Footpad|1|a|The left boot sole is stitched on backwards to muddle pursuit.|B|K|165
 Half-Elf Duelist|4||Its narrow sword has a thumb ring worn bright from practice.
-Human Hedge Mage|4|s|Waxed packets of powdered seeds hang from its collar.
-Human Hex Priest|5|s|The knots in its staff are darkened by burnt offerings.
-Iron Captain|7||It checks the distance between its soldiers with its spear haft.
+Human Hedge Mage|4|s|Waxed packets of powdered seeds hang from its collar.|C|M
+Human Hex Priest|5|s|The knots in its staff are darkened by burnt offerings.|C|M
+Iron Captain|7||It checks the distance between its soldiers with its spear haft.|C|M
 `,
   );
   family(
@@ -400,16 +411,16 @@ Iron Captain|7||It checks the distance between its soldiers with its spear haft.
     4,
     13,
     `
-Ettin|10||One head watches the trail while the other searches the treetops.
+Ettin|10||One head watches the trail while the other searches the treetops.|C Y|O|2.5
 Cyclops|12|m|Each throwing stone has been rounded by patient hands.
 Hill Giant|8|m|It uses a pine trunk worn smooth at the roots as a walking stick.
-Stone Giant|9|m|Rough seams under the eyes make it look carved from granite.
-Frost Giant|10|mk|White hair is bound into the steel rings of its armour.
-Fire Giant|11|mh|It claps slag from its boots before crossing a wooden floor.
-Cloud Giant|12|ms|A deep scent of rain follows it down from its high hall.
-Storm Giant|15|bl|The metal of its belt hums when the clouds gather.
-Titan|20|ms|Its sandals carry dust from peaks untouched by any road.
-Troll|6|r|A fresh cut seals behind the edge of the blade that made it.
+Stone Giant|9|m|Rough seams under the eyes make it look carved from granite.|D|-|4.5
+Frost Giant|10|mk|White hair is bound into the steel rings of its armour.|E|-|4.5
+Fire Giant|11|mh|It claps slag from its boots before crossing a wooden floor.|E|-|4.5
+Cloud Giant|12|ms|A deep scent of rain follows it down from its high hall.|E Q*5|-|3.5
+Storm Giant|15|bl|The metal of its belt hums when the clouds gather.|E Q*10 S|-|2.5
+Titan|20|ms|Its sandals carry dust from peaks untouched by any road.|E Q*10 R
+Troll|6|r|A fresh cut seals behind the edge of the blade that made it.|D|-|6.5
 Marsh Troll|6|ra|Mud hides the pale seams where old wounds have grown back.
 Stone Troll|8|r|Pebbles stick in its thick skin and travel there for years.
 Two-Hearted Troll|10|r|Two pulses beat out of time beneath its long throat.
@@ -422,18 +433,18 @@ Ash Giant|14|bh|Its huge palms leave warm grey prints on the valley walls.
     4,
     18,
     `
-Skeleton|1|U1|One loose knucklebone rattles as the empty hand closes.
-Zombie|2|U2|Its head lags behind each slow turn of the shoulders.
-Ghoul|2|fU3|The long nails are worn smooth from lifting grave slabs.
-Shadow|3|dU4R1|It travels along a wall even after the lantern is put out.
-Wight|4|dU5R1|Grass withers under the nails of its armoured gloves.
-Ghast|4|fbU4|A wet-earth stench clings to the edges of its robe.
-Wraith|5|dvU6R1|It moves as a crease in the air above its burial cloth.
-Mummy|6|fU7R1|Old resin cracks between the folds of its winding sheet.
-Spectre|7|dvU8R1|The face appears only in the reflection on a blade.
-Vampire|8|drvU9R1|It smooths the dust beside its coffin before rising.
-Ghost|10|ifU10R2|It pauses at every vanished doorway of its old home.
-Lich|14|sfU12R2|A small brass lock hangs over the hollow of its chest.
+Skeleton|1|U1|One loose knucklebone rattles as the empty hand closes.|-
+Zombie|2|U2|Its head lags behind each slow turn of the shoulders.|-
+Ghoul|2|fU3|The long nails are worn smooth from lifting grave slabs.|B T|-|13
+Shadow|3|dU4R1|It travels along a wall even after the lantern is put out.|F|-|11
+Wight|4|dU5R1|Grass withers under the nails of its armoured gloves.|B|-|9
+Ghast|4|fbU4|A wet-earth stench clings to the edges of its robe.|B Q R S T|-|3.5
+Wraith|5|dvU6R1|It moves as a crease in the air above its burial cloth.|E|-|7
+Mummy|6|fU7R1|Old resin cracks between the folds of its winding sheet.|D|-|5
+Spectre|7|dvU8R1|The face appears only in the reflection on a blade.|Q*3 X Y|-|3.5
+Vampire|8|drvU9R1|It smooths the dust beside its coffin before rising.|F|-|2.5
+Ghost|10|ifU10R2|It pauses at every vanished doorway of its old home.|E S
+Lich|14|sfU12R2|A small brass lock hangs over the hollow of its chest.|A
 Death Knight|12|bsU11R2|The visor opens on the desperate sound of a distant horn.
 Barrow Rider|6|dU6|Its horse leaves two sets of hoofprints and casts no shadow.
 Banshee|7|bU8R1|First the birds fall silent, then the reeds bend to a breathless cry.
@@ -449,33 +460,33 @@ Iron King|6|dU7R1|A chain of rusted keys circles his crown. They ring when he re
     5,
     12,
     `
-Basilisk|6|e|Its six slow feet make a half-circle around its stone-still prey.
+Basilisk|6|e|Its six slow feet make a half-circle around its stone-still prey.|F|-|2.5
 Greater Basilisk|10|pe|The little statues near its den still wear expressions of surprise.
-Cockatrice|5|ve|Its naked tail scrapes a crooked line behind its feathered tracks.
-Chimera|9|bv|Three heads tug in different directions until they scent a foe.
-Manticore|6|mv|Its barbed tail hums like a bundle of arrows in flight.
+Cockatrice|5|ve|Its naked tail scrapes a crooked line behind its feathered tracks.|D|-|3.5
+Chimera|9|bv|Three heads tug in different directions until they scent a foe.|F|-|2.5
+Manticore|6|mv|Its barbed tail hums like a bundle of arrows in flight.|E|-|2.5
 Griffin|7|vg|It keeps a lookout above the high pasture where its mate feeds.
-Hippogriff|4|v|The foreclaws grip the ledge while the hind hooves push it into flight.
-Pegasus|4|v|A peppering of white feathers marks its favourite updraft.
-Unicorn|4|t|A pale scraping on the tree trunk marks where it steadied its horn.
-Owlbear|5|g|A hoarse double hoot rolls out before the hooked beak appears.
+Hippogriff|4|v|The foreclaws grip the ledge while the hind hooves push it into flight.|Q*5|-|9
+Pegasus|4|v|A peppering of white feathers marks its favourite updraft.|-
+Unicorn|4|t|A pale scraping on the tree trunk marks where it steadied its horn.|X|-|3.5
+Owlbear|5|g|A hoarse double hoot rolls out before the hooked beak appears.|C|-|3.5
 Displacer Cat|6|i|The grass lies flat a pace to one side of the visible paws.
 Blink Hound|4|i|Its tracks skip whole puddles without disturbing their surface.
-Hell Hound|5|bh|A cracked black tongue glows at the edges of its mouth.
+Hell Hound|5|bh|A cracked black tongue glows at the edges of its mouth.|C|-|5
 Death Dog|4|p|Two muzzles test the air for different scents.
-Hydra|8|gr|Its many heads drink in turns while the others keep watch.
+Hydra|8|gr|Its many heads drink in turns while the others keep watch.|B
 Cinder Hydra|12|brh|Its discarded scales stay warm for a full day.
 Rime Hydra|12|brk|A rim of frost follows the heads across the surface of the pool.
 Gorgon Bull|8|be|A grey crust spreads wherever its breath touches the reeds.
 Lamassu|7|vs|Kind eyes in a leonine face weigh each drawn weapon.
 Sphinx|12|vs|It scratches its questions into the dust with one enormous claw.
-Harpy|3|vs|Its nest of broken oars hangs high over a cruel bend in the river.
+Harpy|3|vs|Its nest of broken oars hangs high over a cruel bend in the river.|C|-|7
 Siren|5|sf|The sweetest voice always seems to be coming from the far bank.
-Satyr|5|s|Its flute is wrapped in bark against the rain.
-Centaur|4|mt|A braided horsehair cord holds spare arrows across its back.
-Minotaur|6|t|Its horns are polished on the corners of its winding path.
-Lamia|9|ds|Two different tracks merge where the yellow grass grows tall.
-Medusa|6|ep|Little tongues flick along the silk edge of its veil.
+Satyr|5|s|Its flute is wrapped in bark against the rain.|I S X|-|5
+Centaur|4|mt|A braided horsehair cord holds spare arrows across its back.|D I T|M Q|14
+Minotaur|6|t|Its horns are polished on the corners of its winding path.|C|-|4.5
+Lamia|9|ds|Two different tracks merge where the yellow grass grows tall.|D
+Medusa|6|ep|Little tongues flick along the silk edge of its veil.|P Q*10 X V|-|2
 Naga|9|ps|Its heavy coils frame a face as still as a ceremonial mask.
 Water Naga|7|ps|It wears a collar of smooth shells from the deepest part of the pool.
 Guardian Naga|12|ps|Its measured hiss echoes precisely between the pillars of its shrine.
@@ -489,13 +500,13 @@ Guardian Naga|12|ps|Its measured hiss echoes precisely between the pillars of it
     `
 Rust Eater|5|o|The long feelers stroke metal gently before the orange dust falls.
 Stone Borer|9|u|A ringing in the cliff announces its progress through solid rock.
-Purple Worm|15|pug|Gravel pours into its wake like water following a ship.
-Carrion Crawler|3|f|Eight pale feelers reach out from behind the midden.
+Purple Worm|15|pug|Gravel pours into its wake like water following a ship.|B Q*5 X|-|1.5
+Carrion Crawler|3|f|Eight pale feelers reach out from behind the midden.|B|-|3.5
 Ceiling Fisher|7|ag|A shining thread hangs perfectly still above the tunnel.
 Rock Piercer|2|a|Its shell is the only dry stalactite in the wet roof.
 Tunnel Maw|8|agu|Its plated head parts the ground in three broad wedges.
 Lantern Eye|10|msv|Every little eye opens in turn around the creature's floating crown.
-Thought Eater|8|sf|The camp grows quiet before anyone notices the missing thought.
+Thought Eater|8|sf|The camp grows quiet before anyone notices the missing thought.|-
 Brain Leech|6|ad|A soft pulse travels beneath the thin shell of its head.
 Stone Mimic|7|ag|The grain of its wooden lid runs straight across the hinges.
 Cloak Bat|6|acv|It folds into deep drapes under the lintel.
@@ -507,11 +518,11 @@ Crystal Slug|10|bo|The walls near its den are satin-smooth from its corrosive tr
 Fungus Hound|3|ba|A line of small mushrooms follows each of its old tracks.
 Shrieking Cap|3|b|Its gills quiver when a lantern approaches the bed.
 Violet Mold|4|pd|A smear of purple beneath the boot starts to grow fine tendrils.
-Ochre Jelly|6|o|The puddle pulls itself uphill in slow golden waves.
-Black Pudding|10|oc|A bead of black slime eats a groove across the shield boss.
+Ochre Jelly|6|o|The puddle pulls itself uphill in slow golden waves.|-
+Black Pudding|10|oc|A bead of black slime eats a groove across the shield boss.|-
 Grey Ooze|3|oa|It holds the shape of a wet step until someone bears weight on it.
 Gelatinous Cube|4|fg|A handful of coins hangs at different heights in the empty-looking corridor.
-Green Slime|2|od|The glossy green drips fall upwards when the floor is warmer.
+Green Slime|2|od|The glossy green drips fall upwards when the floor is warmer.|-
 Amber Slime|7|oc|Bright flecks of undigested brass drift inside its skin.
 `,
   );
@@ -521,19 +532,19 @@ Amber Slime|7|oc|Bright flecks of undigested brass drift inside its skin.
     7,
     15,
     `
-Black Dragon|8|bvo|A shining line of acid runs along the lower jaw.
-Blue Dragon|10|bvl|Its crest snaps with sparks in the dust before a storm.
-Green Dragon|9|bvp|The leaves nearest its sleeping place stay curled all year.
-Red Dragon|12|bvh|Copper coins sag into one another beneath its warm breast.
-White Dragon|7|bvk|Frost clings to the grooves of its translucent horns.
-Brass Dragon|9|bv|Its thin scales sing against one another in a desert wind.
-Bronze Dragon|11|bvl|The blue-green scales on its feet smell of the open sea.
-Copper Dragon|9|bvo|It sets polished riddling stones in pairs around its den.
-Silver Dragon|12|bvk|A little cloud gathers on each wing tip when it lands.
-Gold Dragon|15|bvhs|Smoke curls from the long whiskers framing its careful smile.
-Wyvern|7|pvg|A black droplet swells on the barb of its folded tail.
+Black Dragon|8|bvo|A shining line of acid runs along the lower jaw.|H|-|2.5
+Blue Dragon|10|bvl|Its crest snaps with sparks in the dust before a storm.|H|-|2.5
+Green Dragon|9|bvp|The leaves nearest its sleeping place stay curled all year.|H|-|2.5
+Red Dragon|12|bvh|Copper coins sag into one another beneath its warm breast.|H S T|-|2.5
+White Dragon|7|bvk|Frost clings to the grooves of its translucent horns.|E O S|-|2.5
+Brass Dragon|9|bv|Its thin scales sing against one another in a desert wind.|H|-|2.5
+Bronze Dragon|11|bvl|The blue-green scales on its feet smell of the open sea.|H S T|-|2.5
+Copper Dragon|9|bvo|It sets polished riddling stones in pairs around its den.|H S|-|2.5
+Silver Dragon|12|bvk|A little cloud gathers on each wing tip when it lands.|H T|-|2.5
+Gold Dragon|15|bvhs|Smoke curls from the long whiskers framing its careful smile.|H|-|2
+Wyvern|7|pvg|A black droplet swells on the barb of its folded tail.|E|-|3.5
 Drake|5|b|Its short wings spread for balance as it runs.
-Dragon Turtle|14|bh|Steam bursts through the reeds growing on its armoured back.
+Dragon Turtle|14|bh|Steam bursts through the reeds growing on its armoured back.|B R S T V
 Ancient Ember Wyrm|20|bvhsR2|A wave of furnace heat crosses the valley before the wings appear.
 Mirror Wyrm|17|bvsR2|Each scale reflects a slightly different moment in the approach.
 Marsh Lindworm|8|pc|Two forelegs hold it upright above its snaking lower body.
@@ -545,25 +556,25 @@ Marsh Lindworm|8|pc|Two forelegs hold it upright above its snaking lower body.
     5,
     15,
     `
-Air Elemental|12|vR2|Leaves whirl upwards inside the outline of a great turning shoulder.
-Earth Elemental|12|uR2|A seam of fresh slate opens like an eye in the rock face.
-Fire Elemental|12|bhR2|A hollow shape leans out of the centre of the flames.
-Water Elemental|12|cgR2|The surface current flows around a pillar standing up from the pool.
-Salamander|7|chR1|A trail of glowing footprints ends in the smelter's coals.
-Invisible Stalker|8|ivaR1|Dust briefly settles on the outline of a hand.
+Air Elemental|12|vR2|Leaves whirl upwards inside the outline of a great turning shoulder.|-
+Earth Elemental|12|uR2|A seam of fresh slate opens like an eye in the rock face.|-
+Fire Elemental|12|bhR2|A hollow shape leans out of the centre of the flames.|-
+Water Elemental|12|cgR2|The surface current flows around a pillar standing up from the pool.|-
+Salamander|7|chR1|A trail of glowing footprints ends in the smelter's coals.|F|-|3.5
+Invisible Stalker|8|ivaR1|Dust briefly settles on the outline of a hand.|-
 Efreet|10|bvh|It wears manacles of solid flame as if they were ornaments.
 Djinn|8|vs|Its garments billow in a breeze that touches nothing else.
 Marid|13|bs|Water spirals around its wrists and drips back uphill.
 Dao|11|us|The stone gives under its heels like soft garden soil.
 Fire Imp|2|pvh|It delights in cooling one little patch of a blacksmith's forge.
-Quasit|3|ipvr|Its grin stays visible for an instant after the rest disappears.
+Quasit|3|ipvr|Its grin stays visible for an instant after the rest disappears.|Q*3
 Chain Fiend|8|cgR1|Its loose chains find hooks in walls that looked perfectly smooth.
 Horned Fiend|12|bhsR2|A hooked shadow falls from each of its blackened horns.
 Ice Fiend|11|bksR2|A thin crust of hoarfrost covers the links of its mail.
 Pit Tyrant|18|bvhsR3|Its wings close slowly like gates across the red glow of its lair.
 Ash Fury|9|bvhR1|Orange sparks dance in the hollows of its eye sockets.
 Abyssal Hound|7|bv|Its low howl vibrates first in the collarbone and then in the ear.
-Nightmare|7|bvh|Smoke from its nostrils trails behind the beating hooves.
+Nightmare|7|bvh|Smoke from its nostrils trails behind the beating hooves.|-
 Balefire Prince|20|bvhsR3|Even the old burns on its wings burn with a second, deeper flame.
 `,
   );
@@ -573,20 +584,20 @@ Balefire Prince|20|bvhsR3|Even the old burns on its wings burn with a second, de
     3,
     10,
     `
-Dryad|3|s|Green veins run to the ends of its woodgrain fingers.
-Nymph|6|sf|The meadow pools grow still when it steps to the water.
-Pixie|1|ivm|Arrows no longer than a finger hide inside its seedpod quiver.
-Sprite|1|vpm|It hangs dewdrops on thorn points like little signal lamps.
-Brownie|1|ias|A set of tiny tool marks appears overnight on a damaged latch.
-Leprechaun|1|is|Its brightly patched shoes leave astonishingly deep prints.
+Dryad|3|s|Green veins run to the ends of its woodgrain fingers.|M*100 Q*10|-|3.5
+Nymph|6|sf|The meadow pools grow still when it steps to the water.|Q*10 X|-|2.5
+Pixie|1|ivm|Arrows no longer than a finger hide inside its seedpod quiver.|R S T X|-|12.5
+Sprite|1|vpm|It hangs dewdrops on thorn points like little signal lamps.|C|-|55
+Brownie|1|ias|A set of tiny tool marks appears overnight on a damaged latch.|O P Q|-|10
+Leprechaun|1|is|Its brightly patched shoes leave astonishingly deep prints.|F
 Willow Wisp|9|ivl|A cold light moves into the marsh in answer to a shouted name.
-Treant|10|tm|In a rising wind it is the last tree whose branches move.
-Shambling Mound|8|gc|A jumbled heap of reed roots stands up on two thick legs.
+Treant|10|tm|In a rising wind it is the last tree whose branches move.|Q*5 S|-|10.5
+Shambling Mound|8|gc|A jumbled heap of reed roots stands up on two thick legs.|B T X|-|2
 Strangling Vine|5|ca|Flowers turn to face travellers while tendrils creep behind them.
 Moss Dryad|5|ps|Its damp green mantle carries the bitter scent of a peat bog.
 Green Hag|9|is|Its cup always smells faintly of the last drinker.
-Sea Hag|5|f|A tangle of kelp drapes from fingers crusted in barnacles.
-Night Hag|10|dsR1|Its bag contains dozens of little clay beds with tangled sheets.
+Sea Hag|5|f|A tangle of kelp drapes from fingers crusted in barnacles.|C Y|-|2.5
+Night Hag|10|dsR1|Its bag contains dozens of little clay beds with tangled sheets.|-
 Witch Queen|8|sb|She wears the splinters of Ravenmoor's old floodgates as a crown. The fen climbs each stair behind her.
 `,
   );
@@ -596,11 +607,11 @@ Witch Queen|8|sb|She wears the splinters of Ravenmoor's old floodgates as a crow
     4,
     12,
     `
-Werewolf|4|R1|A crescent of human tooth marks is hidden among the deeper bites.
-Wererat|3|aR1|It knots a bright scarf around its throat in either shape.
-Wereboar|5|tR1|Deep cracks run along its tusks like wrinkles in an old face.
-Werebear|7|gR1|Its old smith's scar shows through the fur of its left paw.
-Weretiger|6|aR1|One striped pawprint leads out from a pair of abandoned sandals.
+Werewolf|4|R1|A crescent of human tooth marks is hidden among the deeper bites.|G|-|10.5
+Wererat|3|aR1|It knots a bright scarf around its throat in either shape.|C|-|14
+Wereboar|5|tR1|Deep cracks run along its tusks like wrinkles in an old face.|B S|-|5
+Werebear|7|gR1|Its old smith's scar shows through the fur of its left paw.|R T X|-|2.5
+Weretiger|6|aR1|One striped pawprint leads out from a pair of abandoned sandals.|D Q*5|-|3.5
 Werejackal|4|fR1|It stares without blinking until its prey begins to sway.
 Doppelganger|4|as|It practises borrowed smiles in any still water it can find.
 Skin Thief|8|dsR1|For a moment its reflection keeps the face it wore yesterday.
@@ -608,7 +619,7 @@ Skin Thief|8|dsR1|For a moment its reflection keeps the face it wore yesterday.
   );
   family(
     "Construct",
-    "V",
+    "-",
     7,
     20,
     `

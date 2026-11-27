@@ -96,6 +96,7 @@ const Campaign = (() => {
     }
     let a = Adventures.list.find((a) => a.id === selected);
     let { race, cls, name, alignment, weapon } = config;
+    const scores = Rules.abilityScores(stats, cls, race);
     UI.modal(
       "Create a company",
       "<p>Muster up to six adventurers for " +
@@ -143,11 +144,11 @@ const Campaign = (() => {
                   .join("") +
                 "</select></label>"
               : "") +
-            '</div><p class="stats">' +
+            '</div><p>Racial ability modifiers · ' + Rules.modifierSummary(race) + '</p><p class="stats">' +
             Rules.abilities
               .map(
                 (k, i) =>
-                  "<span>" + k.slice(0, 3) + " " + Math.max(stats[i], Rules.minimums[cls][i]) + "</span>",
+                  "<span>" + k.slice(0, 3) + " " + scores[i] + "</span>",
               )
               .join("") +
             '</p><div class="btns">' +

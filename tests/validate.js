@@ -39,7 +39,7 @@ vm.runInContext(
   }
   for(const item of Data.items)if(item.spell)assert(Data.spell(item.spell),item.spell);
   for(const monster of Monsters.list){
-    assert(Treasure.tables[monster.treasure],monster.name);
+    for (const type of [...monster.carriedTreasure, ...monster.lairTreasure]) assert(Treasure.tables[type], monster.name);
     assert(monster.strikeStyle, 'Missing attack style: ' + monster.name);
     if(monster.special.includes('breath')) assert(monster.breathColor,monster.name);
   }
