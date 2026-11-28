@@ -13,6 +13,12 @@
       <span>Emberfall · The Emberwild Saga</span>
     </header>
     <main>
+      <div class="play-layout">
+        <section class="explore">
+          <div class="scene-shell">
+      <details class="view-options">
+        <summary aria-label="Adventure and view options" title="Adventure and view options">⚙</summary>
+        <div class="view-drawer">
       <div class="chapter">
         <div>
           <span class="chapter-icon" data-icon="banner"></span
@@ -25,8 +31,6 @@
           <button data-act="menu" class="menu-btn" title="Game menu"><span data-icon="menu"></span> Game menu</button>
         </div>
       </div>
-      <details class="view-options">
-        <summary>View options</summary>
         <fieldset><legend>Show on the main view</legend>
           <label><input type="checkbox" aria-controls="scene-heading scene-note" checked> Scene labels</label>
           <label><input type="checkbox" aria-controls="bearing" checked> Compass</label>
@@ -36,10 +40,9 @@
           <label><input type="checkbox" aria-controls="command-panel" checked> Commands</label>
           <label><input type="checkbox" aria-controls="library" checked> Reference buttons</label>
         </fieldset>
+        </div>
       </details>
-      <div class="play-layout">
-        <section class="explore">
-          <div class="scene-shell"><div class="scene frame">
+          <div class="scene frame">
             <canvas id="view" width="640" height="326" aria-label="First-person exploration view"></canvas>
             <div class="scene-title" id="scene-heading">
               <div class="eyebrow"><span class="live-light"></span><span id="biome">Settlement</span></div>

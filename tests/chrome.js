@@ -18,11 +18,15 @@ try {
   const controls = `
     const initialState = JSON.stringify(Game.state);
     if (document.querySelector('.mast').getBoundingClientRect().height !== 10) throw Error('Masthead is not 10px tall');
+    const options = document.querySelector('.view-options');
+    const sceneTop = () => document.querySelector('.scene').getBoundingClientRect().top;
+    const mastBottom = document.querySelector('.mast').getBoundingClientRect().bottom;
+    if (sceneTop() !== mastBottom) throw Error('Closed options reserve space above the scene');
+    options.querySelector('summary').click();
+    if (!options.open || sceneTop() !== mastBottom) throw Error('Options failed to overlay the scene');
     const menuButton = document.querySelector('.chapter [data-act="menu"]');
     if (!menuButton.getClientRects().length || (innerWidth <= 720 && menuButton.getBoundingClientRect().height < 44))
       throw Error('Compact layout lost the game menu target');
-    const options = document.querySelector('.view-options');
-    options.open = true;
     const boxes = Array.from(options.querySelectorAll('input'));
     for (const box of boxes) {
       box.click();

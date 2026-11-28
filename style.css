@@ -972,10 +972,42 @@ dialog:has(#battlefield) {
   }
 }
 .view-options {
-  margin: 0 0 2px;
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 3;
   color: #e2d9c0;
 }
-.view-options summary { cursor: pointer; width: fit-content; padding: 6px 2px; }
+.view-options summary {
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+  border-radius: 3px;
+  background: #141c20d9;
+  font-size: 20px;
+  list-style: none;
+}
+.view-options summary::-webkit-details-marker { display: none; }
+.view-options summary:focus-visible { outline: 2px solid var(--gold); }
+.view-drawer {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  width: min(320px, calc(100vw - 20px));
+  max-height: calc(100vh - 72px);
+  max-height: calc(100dvh - 72px);
+  overflow: auto;
+  padding: 10px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  box-shadow: 0 4px 14px #0009;
+}
+.view-drawer .chapter { gap: 8px; margin-bottom: 10px; }
+.view-drawer .chapter-tools { width: 100%; justify-content: space-between; }
+.scene-shell .bearing { right: 52px; }
 .view-options fieldset { display: flex; flex-wrap: wrap; gap: 2px 16px; border: 1px solid #575747; }
 .view-options label { display: flex; align-items: center; gap: 5px; min-height: 36px; cursor: pointer; }
 .scene-shell { position: relative; }
@@ -985,7 +1017,6 @@ main [hidden] { display: none !important; }
 @media (max-width: 720px), (max-height: 480px) {
   .scene-shell #interact { position: static; width: 100%; min-height: 44px; }
   .view-options label, .view-options summary { min-height: 44px; }
-  .view-options summary { padding-block: 12px; }
 }
 #touchpad.active {
   display: flex;
