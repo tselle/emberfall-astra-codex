@@ -17,6 +17,10 @@ try {
   const scenario = fs.readFileSync(path.join(__dirname, "scenarios.js"), "utf8");
   const controls = `
     const initialState = JSON.stringify(Game.state);
+    if (document.querySelector('.mast').getBoundingClientRect().height !== 10) throw Error('Masthead is not 10px tall');
+    const menuButton = document.querySelector('.chapter [data-act="menu"]');
+    if (!menuButton.getClientRects().length || (innerWidth <= 720 && menuButton.getBoundingClientRect().height < 44))
+      throw Error('Compact layout lost the game menu target');
     const options = document.querySelector('.view-options');
     options.open = true;
     const boxes = Array.from(options.querySelectorAll('input'));

@@ -9,20 +9,8 @@
   </head>
   <body>
     <header class="mast">
-      <div class="mast-inner">
-        <div class="brand">
-          <canvas id="sigil" width="36" height="44" aria-hidden="true"></canvas>
-          <div>
-            <div class="wordmark">Emberfall</div>
-            <div class="subtitle">The Emberwild Saga</div>
-          </div>
-        </div>
-        <div class="mast-right">
-          <div id="clock"></div>
-          <i class="rule"></i
-          ><button data-act="menu" class="menu-btn"><span data-icon="menu"></span> Game menu</button>
-        </div>
-      </div>
+      <canvas id="sigil" width="36" height="44" aria-hidden="true"></canvas>
+      <span>Emberfall · The Emberwild Saga</span>
     </header>
     <main>
       <div class="chapter">
@@ -31,7 +19,11 @@
           ><span class="chapter-id" id="chapter-id">Adventure E0</span><span class="slash">/</span
           ><span id="adventure-name">The Cellars of Thornwick</span>
         </div>
-        <div class="gold"><span data-icon="coins"></span><b id="gold">120</b> GP</div>
+        <div class="chapter-tools">
+          <div id="clock"></div>
+          <div class="gold"><span data-icon="coins"></span><b id="gold">120</b> GP</div>
+          <button data-act="menu" class="menu-btn" title="Game menu"><span data-icon="menu"></span> Game menu</button>
+        </div>
       </div>
       <details class="view-options">
         <summary>View options</summary>
