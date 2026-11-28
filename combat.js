@@ -663,6 +663,68 @@ const Combat = (() => {
       p.hp + "/" + p.maxHp + " HP · AC " + Rules.ac(p) + ". " +
       (Data.item(p.weapon)?.name || "Unarmed") + " · " + (Data.item(p.armour)?.name || "Unarmoured") + ".";
   }
+  function facet(g, color, ...points) {
+    g.beginPath();
+    g.moveTo(points[0], points[1]);
+    for (let i = 2; i < points.length; i += 2) g.lineTo(points[i], points[i + 1]);
+    g.closePath();
+    g.fillStyle = color;
+    g.fill();
+  }
+  function diamond(g, color, x, y) {
+    facet(g, color, x, y - 14, x + 28, y, x, y + 13, x - 28, y);
+  }
+  // Terrain never changes during an encounter. Bake its lighting and relief once,
+  // leaving targeting, conditions and figures on the live canvas.
+  let terrainPlate;
+  function terrainArt(rows, width, height) {
+    if (terrainPlate?.rows === rows && terrainPlate.canvas.width === width && terrainPlate.canvas.height === height)
+      return terrainPlate.canvas;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const g = canvas.getContext("2d");
+    const light = g.createRadialGradient(width * .42, height * .28, 0, width * .5, height * .5, width * .65);
+    light.addColorStop(0, "#36454a");
+    light.addColorStop(1, "#10171d");
+    g.fillStyle = light;
+    g.fillRect(0, 0, width, height);
+    rows.forEach((row, j) => [...row].forEach((tile, i) => {
+      const [x,y] = toScreen(i,j), surface = Battlefield.surfaces[tile];
+      const n = (i*37 + j*19 + i*j*7) % 23;
+      if (i === row.length-1 || j === rows.length-1) {
+        facet(g, "#354041", x-28,y, x,y+13, x,y+22, x-28,y+9);
+        facet(g, "#202b2e", x,y+13, x+28,y, x+28,y+9, x,y+22);
+      }
+      diamond(g, surface?.[1] || "#465453", x, y);
+      diamond(g, `rgba(14,28,32,${.04 + n/130})`, x, y);
+      if (tile === "#" || tile === "R") {
+        const w = tile === "#" ? 23 : 14, h = tile === "#" ? 9 : 12;
+        facet(g, "#505a5b", x-w,y-4, x,y+4, x,y+10, x-w,y+2);
+        facet(g, "#313c40", x,y+4, x+w,y-5, x+w,y+1, x,y+10);
+        facet(g, "#7a807a", x-w,y-4, x-3,y-h-4, x+w,y-5, x,y+4);
+      } else if (tile === "T") {
+        g.fillStyle = "#715c44";
+        g.fillRect(x-2,y-2,4,9);
+        facet(g, "#709065", x-13,y+1, x,y-15, x,y+5);
+        facet(g, "#284e43", x,y-15, x+13,y+1, x,y+5);
+      } else if (tile === "~") {
+        g.fillStyle = "#86b4b5";
+        g.fillRect(x-14+n/2,y-3,9,1);
+        g.fillRect(x+5-n/3,y+3,6,1);
+      } else if (surface?.[2]) {
+        g.fillStyle = "#eee1bb";
+        g.textAlign = "center";
+        g.fillText(surface[2], x, y+3);
+      } else {
+        g.fillStyle = "rgba(229,225,182,.22)";
+        g.fillRect(x-14+n,y-3,n%5+2,1);
+        g.fillRect(x+6-n/2,y+4,2,1);
+      }
+    }));
+    terrainPlate = { rows, canvas };
+    return canvas;
+  }
   function render(cursor, effect, progress = 0) {
     let c = UI.$("battlefield"),
       g = c.getContext("2d"),
@@ -672,27 +734,15 @@ const Combat = (() => {
     const inspected = hoveredUnit || pinnedUnit;
     UI.$("unit-description").textContent = unitDescription(inspected || u);
     const figures = b.units.filter(v => alive(v) || (effect && v.x === effect.x && v.y === effect.y && !v.fled)).sort((a, c) => a.x + a.y - c.x - c.y);
-    g.fillStyle = "#182322";
-    g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(terrainArt(grid(), c.width, c.height), 0, 0);
+    const reachable = new Set(steps.map(p => p.y * Battlefield.width + p.x));
     for (let y = 0; y < grid().length; y++)
       for (let x = 0; x < grid()[y].length; x++) {
         let [cx, cy] = toScreen(x, y);
-        const surface = Battlefield.surfaces[grid()[y][x]];
-        g.fillStyle = cursor?.x === x && cursor.y === y ? "#ae905a" : steps.some((p) => p.x === x && p.y === y)
-          ? "#697b53"
-          : b.clouds.some((p) => inCloud({ x, y }, p))
-            ? "#708548"
-            : surface ? surface[1] : (x + y) % 2
-              ? "#465147"
-              : "#3c493f";
-        g.beginPath();
-        g.moveTo(cx, cy - 14);
-        g.lineTo(cx + 28, cy);
-        g.lineTo(cx, cy + 13);
-        g.lineTo(cx - 28, cy);
-        g.closePath();
-        g.fill();
+        if (reachable.has(y * Battlefield.width + x)) diamond(g, "rgba(99,215,208,.38)", cx, cy);
+        if (cursor?.x === x && cursor.y === y) diamond(g, "rgba(255,210,104,.65)", cx, cy);
         if (x === u.x && y === u.y) {
+          diamond(g, "rgba(255,218,82,.22)", cx, cy);
           g.save();
           g.strokeStyle = "#211b13";
           g.lineWidth = 6;
@@ -703,13 +753,9 @@ const Combat = (() => {
           g.restore();
         }
         if (b.clouds.some(cloud => inCloud({x,y}, cloud))) {
+          diamond(g, "rgba(168,200,85,.4)", cx, cy);
           g.fillStyle = "#adc779";
           g.fillRect(cx - 7, cy - 2, 14, 3);
-        }
-        if (surface?.[2]) {
-          g.fillStyle = "#cdc9ad";
-          g.textAlign = "center";
-          g.fillText(surface[2], cx, cy + 3);
         }
       }
     for (const v of b.units.filter(downed)) {
@@ -720,8 +766,12 @@ const Combat = (() => {
     }
     for (let v of figures) {
       let [x, y] = toScreen(v.x, v.y);
-      g.fillStyle = v === u ? "#e0c584" : v.enemy ? "#ad7056" : "#839575";
-      g.fillRect(x - 8, y + 2, 16, 3);
+      g.beginPath();
+      g.ellipse(x, y + 2, 13, 5, 0, 0, Math.PI * 2);
+      g.fillStyle = "rgba(13,21,25,.8)";
+      g.fill();
+      g.strokeStyle = v === u ? "#ffda52" : v.enemy ? "#ed997c" : "#86d7cc";
+      g.stroke();
       if (effect?.kind === "melee" && v === u) {
         const [tx, ty] = toScreen(effect.x, effect.y);
         const reach = {bite:.76, claw:.67, peck:.8, ram:.92, kick:.48, touch:.42};
