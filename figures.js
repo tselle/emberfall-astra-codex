@@ -1,4 +1,4 @@
-/* Emberfall's portrait plates and tabletop miniatures, drawn on an integer pixel grid. */
+/* Pixel portraits and vector heraldry for the tactical tabletop. */
 var Figures = (() => {
   "use strict";
 
@@ -43,8 +43,7 @@ var Figures = (() => {
   const brass = ["#524131", "#896942", "#bb985b", "#ead193"];
   const leather = ["#392b28", "#604338", "#8b6144", "#b38b60"];
   const portraitCache = [],
-    creatureCache = new Map(),
-    unitCache = new Map();
+    creatureCache = new Map();
 
   function surface(width, height) {
     const canvas = document.createElement("canvas");
@@ -963,78 +962,56 @@ var Figures = (() => {
     return result;
   }
 
-  function mini(index) {
-    if (unitCache.has(index)) return unitCache.get(index);
-    const cv = surface(24, 32),
-      { poly, box, line } = brushes(cv.getContext("2d"));
-    const { skin: s, hair: h, cloth: k } = faces[index],
-      d = index === 2 ? 3 : 0;
-    box(leather[0], 7, 25, 4, 6);
-    box(leather[0], 14, 25, 4, 6);
-    box(leather[2], 7, 29, 3);
-    box(leather[1], 15, 29, 3);
-    poly(k[0], 3, 24, 5, 16 + d, 9, 12 + d, 15, 12 + d, 20, 16 + d, 21, 24, 17, 26, 12, 25, 6, 26);
-    poly(k[1], 5, 23, 7, 16 + d, 11, 14 + d, 16, 15 + d, 18, 20, 16, 25, 9, 24);
-    poly(k[2], 6, 19, 8, 15 + d, 12, 14 + d, 11, 18 + d, 9, 20 + d);
-    box(leather[0], 8, 22 + d, 9, 2);
-    box(brass[2], 11, 22 + d, 2);
-    poly(s[0], 7, 7 + d, 10, 4 + d, 15, 4 + d, 18, 7 + d, 17, 12 + d, 13, 15 + d, 9, 13 + d);
-    poly(s[2], 9, 8 + d, 13, 6 + d, 16, 8 + d, 16, 12 + d, 13, 14 + d, 10, 12 + d);
-    box(s[4], 14, 10 + d, 2);
-    box(h[0], 15, 9 + d);
-    poly(
-      index === 1 || index === 4 || index === 2 ? k[1] : h[1],
-      6,
-      9 + d,
-      7,
-      5 + d,
-      11,
-      2 + d,
-      16,
-      3 + d,
-      18,
-      6 + d,
-      18,
-      9 + d,
-      15,
-      7 + d,
-      12,
-      7 + d,
-      11,
-      10 + d,
-      9,
-      13 + d,
-      7,
-      12 + d,
-    );
-    line(index === 1 || index === 4 || index === 2 ? k[3] : h[2], 8, 6 + d, 12, 3 + d);
-    if (index === 0 || index === 2)
-      poly(h[1], 10, 10 + d, 12, 12 + d, 16, 11 + d, 15, 15 + d, 12, 16 + d, 10, 14 + d);
-    if (index === 0 || index === 5) {
-      poly(k[0], 1, 15 + d, 5, 13 + d, 10, 16 + d, 9, 22 + d, 6, 26, 2, 23);
-      poly(k[2], 2, 16 + d, 5, 15 + d, 8, 17 + d, 7, 22 + d, 5, 24, 3, 22);
-      line(k[3], 3, 16 + d, 5, 15 + d);
-      line("#b4c4c4", 18, 21, 22, 10);
-      box(brass[2], 17, 20, 4);
-      box(s[2], 17, 22, 2);
-    } else if (index === 1) {
-      line("#c29765", 19, 10, 22, 16);
-      line("#c29765", 22, 16, 22, 20);
-      line("#c29765", 22, 20, 17, 28);
-      line("#b3ad92", 19, 11, 17, 27);
-      box(s[3], 19, 18, 2, 2);
-    } else if (index === 2 || index === 3) {
-      line(leather[2], 18, 29, 21, 9);
-      line(leather[1], 19, 29, 22, 9);
-      box(index === 2 ? k[2] : "#7997ab", 19, 7, 5, 4);
-      box(index === 2 ? k[3] : "#c0c8df", 20, 6, 3, 2);
-    } else {
-      line("#a9bbaf", 18, 21, 22, 16);
-      line(leather[2], 17, 22, 19, 20);
-      box(s[3], 17, 22, 2);
+  // Each crest is a closed silhouette. Four coordinates describe a quadratic arc.
+  const crests = {
+    Fighter: [[0,-9],[3,-5],[1,2],[5,2],[5,4],[1,4],[1,8],[-1,8],[-1,4],[-5,4],[-5,2],[-1,2],[-3,-5]],
+    Ranger: [[-6,7],[-5,-4,7,-8],[7,2,-2,4],[4,-5],[-3,2]],
+    Cleric: [[-2,-8],[2,-8],[2,-3],[7,-3],[7,1],[2,1],[2,8],[-2,8],[-2,1],[-7,1],[-7,-3],[-2,-3]],
+    Mage: [[0,-9],[2,-2],[7,0],[2,2],[0,9],[-2,2],[-7,0],[-2,-2]],
+    Thief: [[-6,8],[-3,1],[-5,-1],[-3,-2],[-1,0],[7,-8],[6,-1,1,3],[2,5],[0,6],[-2,4]],
+    Paladin: [[0,-8],[7,-5],[7,4,0,9],[-7,4,-7,-5]],
+  };
+  const beasts = [
+    [[-6,8],[-5,0,0,-3],[-5,-4],[-2,-8],[1,-6],[5,-9],[4,-5],[8,-1],[6,1],[2,0],[0,2,4,8]], // drake
+    [[0,-7],[3,-6],[4,-3],[8,-6],[5,-1],[8,2],[4,1],[7,7],[3,4],[0,10,-3,4],[-7,7],[-4,1],[-8,2],[-5,-1],[-8,-6],[-4,-3],[-3,-6]],
+    [[-7,6],[-5,2,-4,-3],[-3,-9,3,-8],[8,-6,5,-1],[1,3,6,6],[3,7,0,4],[-1,9,-4,6]], // apparition
+    [[-6,7],[-5,1,-7,-6],[-2,-3],[2,-8],[3,-3],[8,0],[6,3],[2,2],[1,7]], // beast profile
+    [[-6,-1],[-8,-8,0,-8],[8,-8,6,-1],[6,3,3,3],[3,7],[1,6],[0,8],[-2,6],[-3,7],[-3,3],[-6,3]],
+    [[-8,-7],[-3,-3,0,-2],[2,-6,5,-4],[7,-3],[4,-2],[3,2,0,3],[-4,8],[-3,3],[-7,3],[-4,0],[-8,-2]], // wing
+    [[-7,-8],[-3,-4],[3,-4],[7,-8],[6,0],[3,5],[0,8],[-4,4],[-6,1]], // horned mask
+  ];
+  function unit(g, x, y, index, enemyName, cls) {
+    const enemy = !!enemyName, kind = enemy && beastKind(enemyName);
+    const cloth = faces[slot(index)].cloth;
+    const outline = enemy ? beasts[kind] : crests[cls] || crests.Fighter;
+    g.save();
+    g.translate(x, y - 15);
+    const rim = g.createLinearGradient(-10,-15,9,12);
+    rim.addColorStop(0, '#fff1c4'); rim.addColorStop(.45, '#b49d73'); rim.addColorStop(1, '#665340');
+    const enamel = g.createRadialGradient(-4,-8,1,0,0,16);
+    enamel.addColorStop(0, enemy ? '#ab6254' : cloth[2]);
+    enamel.addColorStop(1, enemy ? '#4a2932' : cloth[0]);
+    g.beginPath();
+    if (enemy) g.ellipse(0,0,12,14,0,0,Math.PI*2);
+    else {
+      g.moveTo(0,-14); g.quadraticCurveTo(7,-11,12,-11);
+      g.bezierCurveTo(13,1,11,8,0,15); g.bezierCurveTo(-11,8,-13,1,-12,-11);
+      g.quadraticCurveTo(-7,-11,0,-14);
     }
-    unitCache.set(index, cv);
-    return cv;
+    g.closePath(); g.fillStyle = enamel; g.fill();
+    g.lineWidth = 3; g.strokeStyle = '#282729'; g.stroke();
+    g.lineWidth = 1.5; g.strokeStyle = rim; g.stroke();
+    g.beginPath(); g.moveTo(...outline[0]);
+    for (const p of outline.slice(1)) {
+      if (p.length === 2) g.lineTo(...p); else g.quadraticCurveTo(...p);
+    }
+    g.closePath(); g.fillStyle = '#fff0cc'; g.fill();
+    if (enemy && kind === 4) {
+      for (const eye of [-2.8,2.8]) {
+        g.beginPath(); g.arc(eye,-1.3,1.6,0,Math.PI*2); g.fillStyle = '#542f33'; g.fill();
+      }
+    }
+    g.restore();
   }
 
   function slot(index) {
@@ -1052,13 +1029,7 @@ var Figures = (() => {
       if (!portraitCache[i]) portraitCache[i] = portraitPlate(i);
       paint(canvas, portraitCache[i]);
     },
-    unit(ctx, x, y, index, enemyName) {
-      const art = enemyName ? creature(enemyName) : mini(slot(index));
-      ctx.save();
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(art, Math.round(x - art.width / 2), Math.round(y - art.height));
-      ctx.restore();
-    },
+    unit,
     monster(canvas, name) {
       paint(canvas, creature(name));
     },

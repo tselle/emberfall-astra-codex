@@ -742,6 +742,8 @@ select {
   width: 100%;
   height: auto;
   background: #141b1a;
+}
+.map-canvas {
   image-rendering: pixelated;
 }
 .wide {
@@ -756,6 +758,7 @@ dialog:has(#battlefield) {
   margin: auto;
 }
 .battle-canvas {
+  image-rendering: auto;
   max-width: 120vh;
   max-width: 120dvh;
   margin-inline: auto;

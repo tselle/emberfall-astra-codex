@@ -46,11 +46,14 @@ try {
     if (!pinned.includes(Monsters.get(foe.monster).description) || selected.getAttribute("aria-pressed") !== "true" ||
         battle.index !== turn) throw Error("Roster inspection");
     const canvas = document.getElementById("battlefield");
+    const scale = Math.min(2, Math.max(1, Math.ceil(devicePixelRatio)));
+    if (canvas.width !== 960 * scale || canvas.height !== 480 * scale || getComputedStyle(canvas).imageRendering !== 'auto')
+      throw Error('Battlefield backing resolution or smoothing');
     const rect = canvas.getBoundingClientRect();
     const ally = battle.units.filter(v => !v.enemy).sort((a,b) => b.x+b.y-a.x-a.y)[0];
     canvas.dispatchEvent(new PointerEvent("pointermove", {pointerType:"mouse",
-      clientX:rect.left+(420+(ally.x-ally.y)*29)*rect.width/canvas.width,
-      clientY:rect.top+(38+(ally.x+ally.y)*14-10)*rect.height/canvas.height}));
+      clientX:rect.left+(420+(ally.x-ally.y)*29)*rect.width/960,
+      clientY:rect.top+(38+(ally.x+ally.y)*14-10)*rect.height/480}));
     if (!details.textContent.includes(Game.state.party[ally.index].name)) throw Error("Battlefield hover");
     canvas.dispatchEvent(new PointerEvent("pointerleave"));
     if (details.textContent !== pinned) throw Error("Restore inspected unit");
@@ -99,6 +102,7 @@ try {
         "--headless",
         "--force-prefers-reduced-motion",
         "--disable-gpu",
+        "--force-device-scale-factor=" + (size === "390,844" ? 2 : 1),
         "--disable-dev-shm-usage",
         "--user-data-dir=" + path.join(temp, "profile-" + size),
         "--window-size=" + size,

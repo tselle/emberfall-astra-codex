@@ -677,13 +677,16 @@ const Combat = (() => {
   // Terrain never changes during an encounter. Bake its lighting and relief once,
   // leaving targeting, conditions and figures on the live canvas.
   let terrainPlate;
-  function terrainArt(rows, width, height) {
-    if (terrainPlate?.rows === rows && terrainPlate.canvas.width === width && terrainPlate.canvas.height === height)
+  const boardWidth = 960, boardHeight = 480;
+  function terrainArt(rows, scale) {
+    const width = boardWidth, height = boardHeight;
+    if (terrainPlate?.rows === rows && terrainPlate.scale === scale)
       return terrainPlate.canvas;
     const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = width * scale;
+    canvas.height = height * scale;
     const g = canvas.getContext("2d");
+    g.scale(scale, scale);
     const light = g.createRadialGradient(width * .42, height * .28, 0, width * .5, height * .5, width * .65);
     light.addColorStop(0, "#36454a");
     light.addColorStop(1, "#10171d");
@@ -697,32 +700,34 @@ const Combat = (() => {
         facet(g, "#202b2e", x,y+13, x+28,y, x+28,y+9, x,y+22);
       }
       diamond(g, surface?.[1] || "#465453", x, y);
-      diamond(g, `rgba(14,28,32,${.04 + n/130})`, x, y);
+      const wash = g.createLinearGradient(x-6,y-12,x+6,y+12);
+      wash.addColorStop(0, `rgba(240,223,186,${.08+n/230})`);
+      wash.addColorStop(1, 'rgba(16,30,34,.21)');
+      diamond(g, wash, x, y);
       if (tile === "#" || tile === "R") {
         const w = tile === "#" ? 23 : 14, h = tile === "#" ? 9 : 12;
         facet(g, "#505a5b", x-w,y-4, x,y+4, x,y+10, x-w,y+2);
         facet(g, "#313c40", x,y+4, x+w,y-5, x+w,y+1, x,y+10);
         facet(g, "#7a807a", x-w,y-4, x-3,y-h-4, x+w,y-5, x,y+4);
       } else if (tile === "T") {
-        g.fillStyle = "#715c44";
-        g.fillRect(x-2,y-2,4,9);
-        facet(g, "#709065", x-13,y+1, x,y-15, x,y+5);
-        facet(g, "#284e43", x,y-15, x+13,y+1, x,y+5);
+        facet(g, '#675642', x-3,y+7, x-1,y-7, x+1,y-7, x+3,y+7);
+        const leaves = g.createRadialGradient(x-4,y-10,1,x,y-4,14);
+        leaves.addColorStop(0, '#8fa479'); leaves.addColorStop(1, '#2c5047');
+        g.beginPath(); g.moveTo(x,y-17);
+        g.bezierCurveTo(x+11,y-14,x+19,y+4,x+3,y+3);
+        g.bezierCurveTo(x-12,y+9,x-17,y-5,x,y-17);
+        g.fillStyle = leaves; g.fill();
       } else if (tile === "~") {
-        g.fillStyle = "#86b4b5";
-        g.fillRect(x-14+n/2,y-3,9,1);
-        g.fillRect(x+5-n/3,y+3,6,1);
+        g.beginPath(); g.moveTo(x-15+n/3,y);
+        g.bezierCurveTo(x-7,y-6,x+1,y+4,x+10+n/5,y-1);
+        g.lineWidth = .9; g.strokeStyle = '#97bdba'; g.stroke();
       } else if (surface?.[2]) {
         g.fillStyle = "#eee1bb";
         g.textAlign = "center";
         g.fillText(surface[2], x, y+3);
-      } else {
-        g.fillStyle = "rgba(229,225,182,.22)";
-        g.fillRect(x-14+n,y-3,n%5+2,1);
-        g.fillRect(x+6-n/2,y+4,2,1);
       }
     }));
-    terrainPlate = { rows, canvas };
+    terrainPlate = { rows, scale, canvas };
     return canvas;
   }
   function render(cursor, effect, progress = 0) {
@@ -734,7 +739,13 @@ const Combat = (() => {
     const inspected = hoveredUnit || pinnedUnit;
     UI.$("unit-description").textContent = unitDescription(inspected || u);
     const figures = b.units.filter(v => alive(v) || (effect && v.x === effect.x && v.y === effect.y && !v.fled)).sort((a, c) => a.x + a.y - c.x - c.y);
-    g.drawImage(terrainArt(grid(), c.width, c.height), 0, 0);
+    // Input and animation stay in board coordinates regardless of backing resolution.
+    const scale = Math.min(2, Math.max(1, Math.ceil(globalThis.devicePixelRatio || 1)));
+    if (c.width !== boardWidth * scale || c.height !== boardHeight * scale) {
+      c.width = boardWidth * scale; c.height = boardHeight * scale;
+    }
+    g.setTransform(scale, 0, 0, scale, 0, 0);
+    g.drawImage(terrainArt(grid(), scale), 0, 0, boardWidth, boardHeight);
     const reachable = new Set(steps.map(p => p.y * Battlefield.width + p.x));
     for (let y = 0; y < grid().length; y++)
       for (let x = 0; x < grid()[y].length; x++) {
@@ -755,7 +766,7 @@ const Combat = (() => {
         if (b.clouds.some(cloud => inCloud({x,y}, cloud))) {
           diamond(g, "rgba(168,200,85,.4)", cx, cy);
           g.fillStyle = "#adc779";
-          g.fillRect(cx - 7, cy - 2, 14, 3);
+          g.beginPath(); g.ellipse(cx, cy, 8, 2.5, -.15, 0, Math.PI * 2); g.fill();
         }
       }
     for (const v of b.units.filter(downed)) {
@@ -787,7 +798,7 @@ const Combat = (() => {
         x += (Math.sign(x - toScreen(u.x, u.y)[0]) || 1) * 4 * recoil;
         y -= 3 * recoil;
       }
-      Figures.unit(g, x, y + 1, v.enemy ? 0 : P(v).portrait, v.enemy ? M(v).name : null);
+      Figures.unit(g, x, y + 1, P(v)?.portrait, v.enemy ? M(v).name : null, P(v)?.cls);
     }
     if (effect) AttackFX.draw(g, effect, progress, toScreen(u.x,u.y), toScreen(effect.x,effect.y));
     if (inspected) {
@@ -830,8 +841,8 @@ const Combat = (() => {
     c.onpointermove = e => {
       if (e.pointerType === "touch") return;
       const rect = c.getBoundingClientRect();
-      const mx = (e.clientX - rect.left) * c.width / rect.width;
-      const my = (e.clientY - rect.top) * c.height / rect.height;
+      const mx = (e.clientX - rect.left) * boardWidth / rect.width;
+      const my = (e.clientY - rect.top) * boardHeight / rect.height;
       const hit = figures.findLast(v => {
         const [x, y] = toScreen(v.x, v.y);
         return Math.abs(mx - x) <= (v.enemy ? 14 : 12) && my >= y - 31 && my <= y + 2;
@@ -849,8 +860,8 @@ const Combat = (() => {
     };
     c.onclick = (e) => {
       let rect = c.getBoundingClientRect(),
-        mx = ((e.clientX - rect.left) * c.width) / rect.width,
-        my = ((e.clientY - rect.top) * c.height) / rect.height,
+        mx = ((e.clientX - rect.left) * boardWidth) / rect.width,
+        my = ((e.clientY - rect.top) * boardHeight) / rect.height,
         x = Math.round(((mx - 420) / 29 + (my - 38) / 14) / 2),
         y = Math.round(((my - 38) / 14 - (mx - 420) / 29) / 2);
       target(x, y);

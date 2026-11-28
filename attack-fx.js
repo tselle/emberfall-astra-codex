@@ -26,7 +26,10 @@ const AttackFX = (() => {
     const ring = (x,y,r,ink,start=0,end=tau) => {
       g.strokeStyle=ink; g.lineWidth=1.5; g.beginPath(); g.arc(x,y,r,start,end); g.stroke();
     };
-    g.save(); g.lineCap="round";
+    const mote = (x,y,r,ink) => {
+      g.fillStyle=ink; g.beginPath(); g.arc(x,y,r,0,tau); g.fill();
+    };
+    g.save(); g.lineCap="round"; g.lineJoin="round";
     if (e.kind === "breath" && p < .84) {
       // A widening stream originates at the creature rather than a caster's hand.
       const reach=Math.hypot(dx,dy), t=clamp((p-.16)/.5);
@@ -90,13 +93,13 @@ const AttackFX = (() => {
       if (e.style === "spit") { ring(0,0,3,"#b7dd73"); line([[-6,0],[-11,1]],"#98af63",2); }
       else if (e.style === "quill") { for(let j=-1;j<=1;j++) line([[-9,j*4],[0,j*3]],"#e6d6b1",1.5); }
       else if (e.style === "ray") line([[-flight*Math.hypot(dx,dy),0],[0,0]],"#ceafff",3);
-      else if (e.style === "stone" || /sling/i.test(e.weapon || "")) { g.fillStyle="#c9bbb1"; g.fillRect(-2,-2,5,4); }
+      else if (e.style === "stone" || /sling/i.test(e.weapon || "")) mote(0,0,2.4,"#c9bbb1");
       else { line([[-14,0],[0,0]],"#cda87b",2); line([[-4,-2],[1,0],[-4,2]],"#e7e2d3",2); line([[-14,-3],[-10,0],[-14,3]],"#dfcbab",1.5); }
       g.restore();
     } else if (e.kind === "spell" && p < .68) {
       const charge=clamp(p/.26); g.globalAlpha=1-flight*.75;
       ring(sx,sy,4+8*charge,color,p*8,p*8+5);
-      for(let i=0;i<6;i++) {const a=i*tau/6+p*6,r=17-7*charge; g.fillStyle=color; g.fillRect(sx+r*Math.cos(a)-1,sy+r*Math.sin(a)-1,3,3);}
+      for(let i=0;i<6;i++) {const a=i*tau/6+p*6,r=17-7*charge; mote(sx+r*Math.cos(a),sy+r*Math.sin(a),1.6,color);}
       g.globalAlpha=1;
       if(flight>0) {
         if(theme==="storm") {
@@ -104,8 +107,8 @@ const AttackFX = (() => {
           for(let i=1;i<=12;i++) {const t=i*flight/12; points.push([sx+dx*t,sy+dy*t+Math.sin(i*17+p*23)*6*Math.sin(i*Math.PI/12)]);}
           line(points,color,4); line(points,"#fff",1);
         } else {
-          for(let i=7;i>=0;i--) {const t=Math.max(0,flight-i*.025); g.globalAlpha=1-i/9; g.fillStyle=i?color:"#fff";
-            const r=i?3:4; g.fillRect(sx+dx*t-r,sy+dy*t-7*Math.sin(t*Math.PI)-r,r*2,r*2);}
+          for(let i=7;i>=0;i--) {const t=Math.max(0,flight-i*.025); g.globalAlpha=1-i/9;
+            mote(sx+dx*t,sy+dy*t-7*Math.sin(t*Math.PI),4-i*.35,i?color:"#fff");}
         }
       }
     }
