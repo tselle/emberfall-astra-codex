@@ -1,4 +1,4 @@
-/* Pixel portraits and vector heraldry for the tactical tabletop. */
+/* Pixel portraits and articulated, painted miniatures for the tactical tabletop. */
 var Figures = (() => {
   "use strict";
 
@@ -962,54 +962,103 @@ var Figures = (() => {
     return result;
   }
 
-  // Each crest is a closed silhouette. Four coordinates describe a quadratic arc.
-  const crests = {
-    Fighter: [[0,-9],[3,-5],[1,2],[5,2],[5,4],[1,4],[1,8],[-1,8],[-1,4],[-5,4],[-5,2],[-1,2],[-3,-5]],
-    Ranger: [[-6,7],[-5,-4,7,-8],[7,2,-2,4],[4,-5],[-3,2]],
-    Cleric: [[-2,-8],[2,-8],[2,-3],[7,-3],[7,1],[2,1],[2,8],[-2,8],[-2,1],[-7,1],[-7,-3],[-2,-3]],
-    Mage: [[0,-9],[2,-2],[7,0],[2,2],[0,9],[-2,2],[-7,0],[-2,-2]],
-    Thief: [[-6,8],[-3,1],[-5,-1],[-3,-2],[-1,0],[7,-8],[6,-1,1,3],[2,5],[0,6],[-2,4]],
-    Paladin: [[0,-8],[7,-5],[7,4,0,9],[-7,4,-7,-5]],
-  };
-  const beasts = [
-    [[-6,8],[-5,0,0,-3],[-5,-4],[-2,-8],[1,-6],[5,-9],[4,-5],[8,-1],[6,1],[2,0],[0,2,4,8]], // drake
-    [[0,-7],[3,-6],[4,-3],[8,-6],[5,-1],[8,2],[4,1],[7,7],[3,4],[0,10,-3,4],[-7,7],[-4,1],[-8,2],[-5,-1],[-8,-6],[-4,-3],[-3,-6]],
-    [[-7,6],[-5,2,-4,-3],[-3,-9,3,-8],[8,-6,5,-1],[1,3,6,6],[3,7,0,4],[-1,9,-4,6]], // apparition
-    [[-6,7],[-5,1,-7,-6],[-2,-3],[2,-8],[3,-3],[8,0],[6,3],[2,2],[1,7]], // beast profile
-    [[-6,-1],[-8,-8,0,-8],[8,-8,6,-1],[6,3,3,3],[3,7],[1,6],[0,8],[-2,6],[-3,7],[-3,3],[-6,3]],
-    [[-8,-7],[-3,-3,0,-2],[2,-6,5,-4],[7,-3],[4,-2],[3,2,0,3],[-4,8],[-3,3],[-7,3],[-4,0],[-8,-2]], // wing
-    [[-7,-8],[-3,-4],[3,-4],[7,-8],[6,0],[3,5],[0,8],[-4,4],[-6,1]], // horned mask
-  ];
-  function unit(g, x, y, index, enemyName, cls) {
-    const enemy = !!enemyName, kind = enemy && beastKind(enemyName);
-    const cloth = faces[slot(index)].cloth;
-    const outline = enemy ? beasts[kind] : crests[cls] || crests.Fighter;
-    g.save();
-    g.translate(x, y - 15);
-    const rim = g.createLinearGradient(-10,-15,9,12);
-    rim.addColorStop(0, '#fff1c4'); rim.addColorStop(.45, '#b49d73'); rim.addColorStop(1, '#665340');
-    const enamel = g.createRadialGradient(-4,-8,1,0,0,16);
-    enamel.addColorStop(0, enemy ? '#ab6254' : cloth[2]);
-    enamel.addColorStop(1, enemy ? '#4a2932' : cloth[0]);
-    g.beginPath();
-    if (enemy) g.ellipse(0,0,12,14,0,0,Math.PI*2);
-    else {
-      g.moveTo(0,-14); g.quadraticCurveTo(7,-11,12,-11);
-      g.bezierCurveTo(13,1,11,8,0,15); g.bezierCurveTo(-11,8,-13,1,-12,-11);
-      g.quadraticCurveTo(-7,-11,0,-14);
+  // Local coordinates are measured from the feet, with the model facing right.
+  function unit(g, x, y, index, enemyName, cls, pose) {
+    const { phase, stride, action, facing, hit } = pose;
+    const wave = Math.sin(phase), breath = wave * .55;
+    const kind = enemyName ? beastKind(enemyName) : -1;
+    const face = faces[slot(index)], steel = '#b3c9cc', bone = '#e4d6b3';
+    const ink = '#26292d';
+    function paint(top, bottom, high, low) {
+      const fill = g.createLinearGradient(0, high, 2, low);
+      fill.addColorStop(0, top); fill.addColorStop(1, bottom); return fill;
     }
-    g.closePath(); g.fillStyle = enamel; g.fill();
-    g.lineWidth = 3; g.strokeStyle = '#282729'; g.stroke();
-    g.lineWidth = 1.5; g.strokeStyle = rim; g.stroke();
-    g.beginPath(); g.moveTo(...outline[0]);
-    for (const p of outline.slice(1)) {
-      if (p.length === 2) g.lineTo(...p); else g.quadraticCurveTo(...p);
+    function finish(fill) {
+      g.fillStyle = fill; g.fill(); g.lineWidth = .75; g.strokeStyle = ink; g.stroke();
     }
-    g.closePath(); g.fillStyle = '#fff0cc'; g.fill();
-    if (enemy && kind === 4) {
-      for (const eye of [-2.8,2.8]) {
-        g.beginPath(); g.arc(eye,-1.3,1.6,0,Math.PI*2); g.fillStyle = '#542f33'; g.fill();
+    function oval(cx, cy, w, h, fill, tilt = 0) {
+      g.beginPath(); g.ellipse(cx,cy,w,h,tilt,0,2*Math.PI); finish(fill);
+    }
+    function form(fill, start, ...segments) {
+      g.beginPath(); g.moveTo(...start);
+      for (const s of segments) s.length === 2 ? g.lineTo(...s) : g.quadraticCurveTo(...s);
+      g.closePath(); finish(fill);
+    }
+    function limb(color, width, ...points) {
+      g.beginPath(); g.moveTo(...points[0]);
+      for (const p of points.slice(1)) g.lineTo(...p);
+      g.lineWidth = width + 1; g.strokeStyle = ink; g.stroke();
+      g.lineWidth = width; g.strokeStyle = color; g.stroke();
+    }
+    g.save(); g.translate(x,y); g.scale(facing,1); g.lineCap = g.lineJoin = 'round';
+    g.rotate(-hit * .24);
+    if (/ooze|jelly|slime|pudding|gelatinous/i.test(enemyName || '')) {
+      const h = -15-breath*2-action*3;
+      form(paint('#c3c77e','#627249',h,0),[-14,-1],[-15,-7,-9,-8],[-7,h,0,h],[8,h,11,-7],[17,-2,13,0],[1,3,-14,-1]);
+      oval(-3,h+5,2.6,1.1,'#d6dfa1',-.4);
+    } else if (kind === 2) {
+      g.translate(0,breath*2-2);
+      form(paint('#c8e4dd','#536479',-28,0),[-7,-18],[-7,-31,1,-30],[9,-29,7,-17],[9,-8,13,-6],[6,-6,4,-12],[5,-2,-6,0],[-2,-8,-10,-5],[-5,-12,-7,-18]);
+      oval(2,-23,3.3,4,'#344351'); oval(3,-24,1,.7,'#c7edf1');
+    } else if ([0,1,3,5].includes(kind)) {
+      const bird = kind === 5, bug = kind === 1, drake = kind === 0;
+      const rat = /rat|mouse/i.test(enemyName), winged = bird || /dragon|drake|wyvern/i.test(enemyName);
+      const hide = bug ? '#798569' : drake ? '#829e79' : bird ? '#aaa8b0' : rat ? '#af9989' : '#b39170';
+      const coat = paint(hide, '#483e43', -19,-4);
+      g.translate(0,breath + (bird ? -6 + wave : 0));
+      for (let i=0;i<(bug ? 6 : bird ? 2 : 4);i++) {
+        const rear = i%2, hip = bird ? i*4-2 : (rear ? -6 : 5) + (i>>1)*1.4;
+        const step = stride*(i%3===0 ? 1 : -1), toe = hip + (bug ? (rear?-6:5) : -1) + step;
+        limb(rear ? '#635451' : hide,bug?1.4:2.5,[hip,-8],[toe+(bug?2:-2),-5-Math.abs(step)*.4],[toe,-1-Math.max(0,step)*.45],[toe+2,-1-Math.max(0,step)*.45]);
       }
+      if (!bug) form(rat?'#bc9086':hide,[-6,-12],[-16,-10,-19,-15+wave*2],[-17,-7,-6,-7]);
+      oval(-2,-11,bug?10:9,bug?6:5.5,coat,-.14);
+      if (winged) {
+        const tip = -22-wave*5-action*3;
+        form(coat,[2,-12],[-7,tip-4,-16,tip],[-11,-17],[-14,-17],[-8,-10,2,-12]);
+      }
+      g.translate(action*2,-action);
+      if (drake) form(coat,[1,-10],[5,-13,5,-21],[10,-24,12,-20],[16,-18],[14,-15],[9,-16],[7,-9,1,-10]);
+      else {
+        oval(7,-14,bug?4:5,bird?5:4,coat);
+        if (!bug && !bird) {
+          if (rat) oval(5,-18,2.6,2.5,'#c59991');
+          else form(hide,[3,-16],[3,-22],[8,-17]);
+        }
+        form(bird?'#d7b57f':hide,[10,-15],[15,-13],[11,-11]);
+      }
+      oval(drake?10:9,drake?-19:-15,.8,.8,'#e5cb8e');
+    } else {
+      const undead = kind === 4, caster = cls === 'Mage' || cls === 'Cleric';
+      const cloth = enemyName ? ['#523c40','#885959','#b28671'] : face.cloth;
+      const skin = undead ? bone : enemyName ? '#ad9577' : face.skin[3];
+      const metal = paint('#e1e7d9','#586c77',-29,-13);
+      for (const side of [-1,1]) {
+        const step = stride*side, foot = side*3.7+step, floor = -Math.max(0,step)*.5;
+        limb(undead?bone:'#645749',undead?1.8:3.3,[side*2,-12],[foot-1,-6],[foot,floor-1],[foot+2,floor-1]);
+      }
+      g.translate(0,breath-Math.abs(stride)*.22); g.rotate(action*.12);
+      form(paint(cloth[2],cloth[0],-22,-3),[-4,-21],[-8,-18,-8,-10],[-9-wave,-4],[-4,-6,0,-4],[caster?6:4,caster?-2:-9],[4,-17,2,-21]);
+      oval(0,-17,4.7,6,undead?bone:cls==='Paladin'?metal:cloth[2],-.16);
+      limb(undead?bone:cloth[0],2,[-3,-19],[-6,-15],[-5,-11]);
+      oval(1,-25,4.5,5,skin,-.12);
+      oval(4,-25,.8,.65,ink);
+      if (cls === 'Mage') form(cloth[2],[-6,-26],[-2,-34],[1,-32],[4,-27],[7,-26]);
+      else if (cls === 'Ranger' || cls === 'Thief') form(cloth[1],[-5,-21],[-7,-32,0,-31],[6,-30,6,-27],[0,-28,-1,-22]);
+      else if (!undead) {
+        form(enemyName?cloth[0]:metal,[-4,-23],[-6,-31,1,-31],[6,-31,6,-26],[-1,-27],[-3,-23]);
+        if(cls==='Paladin') form('#ba7664',[-2,-30],[-8,-34,-9,-28],[-4,-29],[0,-29]);
+      }
+      g.translate(3,-19); g.rotate(-.25 + wave*.06 - action*1.05);
+      limb(undead?bone:cloth[2],2.8,[0,0],[2,5],[6,3]);
+      if (caster) {
+        limb('#9e7e55',1.7,[5,15],[7,-8]); oval(7,-9,2.3,cls==='Mage'?2.7:3.4,cls==='Mage'?'#99cace':metal);
+      } else if (cls==='Ranger') {
+        form('#b59463',[5,-7],[15,3,5,13],[10,3,5,-7]); limb('#d0bfa0',.65,[5,-7],[5-action*3,3],[5,13]);
+      } else {
+        form(metal,[5,2],[7,2],[10,cls==='Thief'?-4:-10]); limb('#cfb580',1.2,[4,2],[8,3]);
+      }
+      oval(5.6,3,1.7,1.6,skin);
     }
     g.restore();
   }

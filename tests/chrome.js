@@ -74,7 +74,11 @@ try {
     const shortcut = document.querySelector('#modal-body [data-act="help"] kbd').textContent;
     document.dispatchEvent(new KeyboardEvent("keydown",{key:shortcut,bubbles:true}));
     if (!document.getElementById("modal-body").textContent.includes("Lower armour class")) throw Error("Dialog shortcut");
-    document.querySelector('[data-act="close"]').click();
+    const dialog = document.getElementById('dialog');
+    document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
+    if (dialog.dispatchEvent(new Event('cancel', {cancelable:true})) || !dialog.open) throw Error('Escape dismissed dialog');
+    document.dispatchEvent(new KeyboardEvent('keydown', {key:'Delete', bubbles:true}));
+    if (dialog.open) throw Error('Delete did not dismiss dialog');
     document.querySelector('[data-act="journal"]').click();
     if (!document.getElementById("dialog").open) throw Error("Journal click");
     document.querySelector('[data-act="close"]').click();

@@ -118,10 +118,8 @@ const UI = (() => {
       if (e.detail > 0 && b === document.activeElement && b.matches("button")) b.blur();
       Game.act(b.dataset.act, b.dataset.arg, b);
     });
-    $("dialog").addEventListener("cancel", (e) => {
-      e.preventDefault();
-      Game.act("close");
-    });
+    // Suppress the native Escape dismissal; Delete uses the game's close action.
+    $("dialog").addEventListener("cancel", e => e.preventDefault());
   }
   const dialogKeys = new Map();
   let keyPrefix = "";
@@ -164,6 +162,12 @@ const UI = (() => {
   function dialogKey(e) {
     if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
     const key = e.key.toLowerCase();
+    if (key === "delete" && !e.shiftKey && !e.target.isContentEditable) {
+      e.preventDefault();
+      keyPrefix = "";
+      if (!e.repeat) Game.act("close");
+      return;
+    }
     if (key.length !== 1 || !/[a-z1-9]/.test(key)) {
       keyPrefix = "";
       return;
@@ -333,7 +337,8 @@ const UI = (() => {
           ["R / I", "Camp or open inventory"],
           ["M / J / B", "Map, journal or bestiary"],
           ["1–6", "Inspect a company member"],
-          ["Esc", "Game menu or close panel"],
+          ["Esc", "Open game menu"],
+          ["Del", "Close panel"],
         ]
           .map(([k, v]) => '<div class="keyline"><kbd>' + k + "</kbd>" + v + "</div>")
           .join("") +

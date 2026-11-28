@@ -287,6 +287,7 @@ function playAutoFight() {
     const snapshot = JSON.stringify(state());
     const originalMedia = globalThis.matchMedia, originalTimer = globalThis.setTimeout;
     const originalFrame = globalThis.requestAnimationFrame, originalRandom = Math.random;
+    const originalUnit = Figures.unit;
     try {
       Combat.begin("cellar_rat", "test/animation", true);
       const b = state().battle;
@@ -299,10 +300,15 @@ function playAutoFight() {
       b.mode = "attack";
       let drawFrame;
       globalThis.matchMedia = () => ({matches:true});
-      check(UI.$("modal-body").innerHTML.includes("Attack animations: Off"), "reduced-motion default visible");
-      command("battleAnimations");
-      check(state().combatAnimations && UI.$("modal-body").innerHTML.includes("Attack animations: On"), "player can enable effects");
+      check(UI.$("modal-body").innerHTML.includes("Battle animations: Off"), "reduced-motion default visible");
+      let phase;
+      Figures.unit = (...args) => { phase = args[6].phase; originalUnit(...args); };
       globalThis.requestAnimationFrame = draw => { drawFrame = draw; };
+      command("battleAnimations");
+      check(state().combatAnimations && UI.$("modal-body").innerHTML.includes("Battle animations: On"), "player can enable effects");
+      const firstPose = phase, idleState = JSON.stringify(b);
+      drawFrame(performance.now() + 100);
+      check(phase !== firstPose && JSON.stringify(b) === idleState, "idle figurines move without advancing combat");
       globalThis.setTimeout = () => { throw Error("playback must wait for rendered frames"); };
       Math.random = () => 0.99;
       command("battleTarget", "1,0");
@@ -323,6 +329,7 @@ function playAutoFight() {
     } finally {
       globalThis.matchMedia = originalMedia;
       globalThis.setTimeout = originalTimer;
+      Figures.unit = originalUnit;
       globalThis.requestAnimationFrame = originalFrame;
       Math.random = originalRandom;
       Game.setState(JSON.parse(snapshot));

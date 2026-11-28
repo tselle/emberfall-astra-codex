@@ -12,7 +12,7 @@ const Battlefield = (() => {
   const solid = t => !t || "#DTR".includes(t);
   const walkable = (grid, x, y) => !solid(grid[y]?.[x]) && grid[y][x] !== "~";
   const moveDirections = [...Modules.dirs, [-1, -1], [-1, 1], [1, -1], [1, 1]];
-  function flood(grid, start, limit = Infinity, occupied = new Set(), allies = new Set()) {
+  function flood(grid, start, limit = Infinity, occupied = new Set(), allies = new Set(), trace = false) {
     const free = (x, y) => walkable(grid, x, y) && !occupied.has(y * width + x);
     const cells = [{ ...start, steps: 0 }], seen = new Set([start.y * width + start.x]);
     for (let i = 0; i < cells.length; i++) {
@@ -26,7 +26,9 @@ const Battlefield = (() => {
           if (!betweenAllies || !walkable(grid, x, p.y) || !walkable(grid, p.x, y)) continue;
         }
         seen.add(key);
-        cells.push({ x, y, steps: p.steps + 1 });
+        const cell = { x, y, steps: p.steps + 1 };
+        if (trace) cell.previous = p;
+        cells.push(cell);
       }
     }
     return cells;
@@ -290,11 +292,21 @@ const Combat = (() => {
     // Older saves marked the whole move as spent with a boolean.
     return B().moved === true ? 0 : Math.max(0, budget - (B().moved || 0));
   }
-  function path(u) {
+  const walks = new WeakMap();
+  function relocate(u, destination) {
+    if (destination.steps && animationsEnabled()) {
+      const trail = [];
+      for (let p = destination; p; p = p.previous) trail.push(toScreen(p.x,p.y));
+      walks.set(u, { trail: trail.reverse(), start: performance.now(), ms: Math.min(520, destination.steps*140) });
+    }
+    u.x = destination.x;
+    u.y = destination.y;
+  }
+  function path(u, trace = false) {
     const occupied = new Set(B().units.filter(v => v !== u && alive(v)).map(v => v.y * W + v.x));
     const allies = new Set(B().units.filter(v => !u.enemy && !v.enemy && alive(v)).map(v => v.y * W + v.x));
     const fallen = new Set(B().units.filter(downed).map(v => v.y * W + v.x));
-    return Battlefield.flood(grid(), {x:u.x,y:u.y}, movementLeft(u), occupied, allies)
+    return Battlefield.flood(grid(), {x:u.x,y:u.y}, movementLeft(u), occupied, allies, trace)
       .filter(tile => !fallen.has(tile.y * W + tile.x));
   }
   function strike(u, v) {
@@ -445,9 +457,8 @@ const Combat = (() => {
     const distances = new Map(Battlefield.flood(grid(), {x:target.x,y:target.y})
       .map(p => [p.y * W + p.x, p.steps]));
     const remaining = p => distances.get(p.y * W + p.x) ?? Infinity;
-    let cells = path(u).sort((a, c) => remaining(a) - remaining(c) || a.steps - c.steps);
-    u.x = cells[0].x;
-    u.y = cells[0].y;
+    let cells = path(u, true).sort((a, c) => remaining(a) - remaining(c) || a.steps - c.steps);
+    relocate(u, cells[0]);
     if (cells[0].steps) log(name(u) + " advances.");
     const afterMove = foes.find(v => canStrike(u, v));
     if (afterMove) strike(u, afterMove);
@@ -730,7 +741,9 @@ const Combat = (() => {
     terrainPlate = { rows, scale, canvas };
     return canvas;
   }
+  let sceneVersion = 0, idleBackdrop;
   function render(cursor, effect, progress = 0) {
+    const version = ++sceneVersion;
     let c = UI.$("battlefield"),
       g = c.getContext("2d"),
       b = B(),
@@ -775,8 +788,29 @@ const Combat = (() => {
       g.textAlign = "center";
       g.fillText("0 HP", x, y + 3);
     }
+    const animate = animationsEnabled();
+    const idle = animate && !effect && !b.resolved;
+    if (idle) {
+      idleBackdrop ??= document.createElement('canvas');
+      if (idleBackdrop.width !== c.width || idleBackdrop.height !== c.height) {
+        idleBackdrop.width = c.width; idleBackdrop.height = c.height;
+      }
+      idleBackdrop.getContext('2d').drawImage(c, 0, 0);
+    }
+    function drawFigures(now) {
     for (let v of figures) {
-      let [x, y] = toScreen(v.x, v.y);
+      let [x, y] = toScreen(v.x, v.y), stride = 0;
+      const walk = walks.get(v);
+      if (walk) {
+        const t = (now - walk.start) / walk.ms;
+        if (!animate || t >= 1 || (effect && v === u && progress > .2)) walks.delete(v);
+        else {
+          const pos = Math.max(0,t)*(walk.trail.length-1), i = Math.floor(pos);
+          const a = walk.trail[i], next = walk.trail[i+1];
+          x = a[0] + (next[0]-a[0])*(pos-i); y = a[1] + (next[1]-a[1])*(pos-i);
+          stride = 3*Math.sin(pos*Math.PI*2);
+        }
+      }
       g.beginPath();
       g.ellipse(x, y + 2, 13, 5, 0, 0, Math.PI * 2);
       g.fillStyle = "rgba(13,21,25,.8)";
@@ -792,13 +826,19 @@ const Combat = (() => {
         const lift = {claw:5, peck:7, kick:8, slam:5}[effect.style] || 0;
         y -= lift * Math.sin(Math.PI * Math.min(1, progress / .68));
       }
+      let hit = 0;
       if (effect?.hit && v !== u && v.x === effect.x && v.y === effect.y && progress > .68 &&
           !(effect.kind === "spell" && ["heal", "buff", "cure"].includes(effect.sp?.effect))) {
-        const recoil = Math.sin(Math.PI * (progress - .68) / .32);
+        const recoil = hit = Math.sin(Math.PI * (progress - .68) / .32);
         x += (Math.sign(x - toScreen(u.x, u.y)[0]) || 1) * 4 * recoil;
         y -= 3 * recoil;
       }
-      Figures.unit(g, x, y + 1, P(v)?.portrait, v.enemy ? M(v).name : null, P(v)?.cls);
+      const foe = effect && v === u ? effect : figures.find(other => !!other.enemy !== !!v.enemy);
+      const facing = foe && Math.sign(toScreen(foe.x,foe.y)[0] - toScreen(v.x,v.y)[0]) || (v.enemy ? -1 : 1);
+      const action = effect && v === u ? (effect.kind === 'melee' ? AttackFX.meleePose(progress) : Math.sin(Math.PI*progress)) : 0;
+      Figures.unit(g, x, y + 1, P(v)?.portrait, v.enemy ? M(v).name : null, v.enemy ? null : P(v).cls, {
+        phase: animate ? now*.004 + b.units.indexOf(v)*2.4 : 0, stride, action, facing, hit,
+      });
     }
     if (effect) AttackFX.draw(g, effect, progress, toScreen(u.x,u.y), toScreen(effect.x,effect.y));
     if (inspected) {
@@ -824,6 +864,20 @@ const Combat = (() => {
     g.lineWidth = 2;
     g.stroke();
     g.restore();
+    }
+    let lastPaint = performance.now();
+    drawFigures(lastPaint);
+    // During a turn only repaint the live models, not the DOM, grid or input bindings.
+    // Attack playback owns its own clock; a replaced dialog invalidates this scene.
+    function idleFrame(now) {
+      if (sceneVersion !== version || B() !== b || UI.$('battlefield') !== c || !UI.$('dialog').open) return;
+      if (now-lastPaint >= 1000/30) {
+        g.drawImage(idleBackdrop, 0, 0, boardWidth, boardHeight);
+        drawFigures(now); lastPaint = now;
+      }
+      requestAnimationFrame(idleFrame);
+    }
+    if (idle) requestAnimationFrame(idleFrame);
     c.onfocus = () => render({ x: u.x, y: u.y });
     c.onblur = () => { if (B() === b && UI.$("battlefield") === c) render(); };
     c.onkeydown = (e) => {
@@ -891,10 +945,9 @@ const Combat = (() => {
       v = b.units.find((t) => t.x === x && t.y === y && alive(t)),
       at = { x, y },
       valid = true;
-    const destination = b.mode === "move" && path(u).find(t => t.x === x && t.y === y);
+    const destination = b.mode === "move" && path(u, true).find(t => t.x === x && t.y === y);
     if (destination?.steps) {
-      u.x = x;
-      u.y = y;
+      relocate(u, destination);
       log(name(u) + " moves.");
       b.moved = (b.moved || 0) + destination.steps;
       if (!movementLeft(u)) b.mode = "attack";
@@ -1061,7 +1114,7 @@ const Combat = (() => {
         Journal.recentRolls(b) + (b.auto ? "" : "<small>Press shortcut digits in order. Arrow keys select a square. Enter confirms.</small>") + '<p class="muted">' + UI.esc(symbols.join(" · ")) + '</p><div class="btns">' +
         buttons + (!b.resolved && !b.proposedSpell ? UI.btn("Auto spells: " +
           ({yes:"Yes", no:"No", ask:"Ask"}[S().autoSpells] || "Yes"), "battleAutoSpells") : "") +
-        (!b.resolved ? UI.btn("Attack animations: " + (animationsEnabled() ? "On" : "Off"), "battleAnimations") : "") +
+        (!b.resolved ? UI.btn("Battle animations: " + (animationsEnabled() ? "On" : "Off"), "battleAnimations") : "") +
         "</div><p>" +
         instruction +
         '</p><div class="choices">' +
