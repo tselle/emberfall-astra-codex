@@ -53,7 +53,29 @@ const UI = (() => {
       btn("↑ Move up", "order", index + ",-1", index === 0) +
       btn("↓ Move down", "order", index + ",1", index === size - 1) + "</div>";
   }
+  function bindViewOptions() {
+    const key = 'emberfall.hiddenViewPanels';
+    const boxes = Array.from(document.querySelectorAll('.view-options input[aria-controls]'));
+    let hidden = [];
+    try {
+      const saved = JSON.parse(localStorage.getItem(key));
+      if (Array.isArray(saved)) hidden = saved;
+    } catch { /* Preferences are optional when storage is unavailable. */ }
+    for (const box of boxes) {
+      const ids = box.getAttribute('aria-controls');
+      const apply = () => ids.split(' ').forEach(id => { $(id).hidden = !box.checked; });
+      box.checked = !hidden.includes(ids);
+      apply();
+      box.addEventListener('change', () => {
+        apply();
+        try {
+          localStorage.setItem(key, JSON.stringify(boxes.filter(b => !b.checked).map(b => b.getAttribute('aria-controls'))));
+        } catch { /* Keep the in-session layout. */ }
+      });
+    }
+  }
   function init() {
+    bindViewOptions();
     document.querySelectorAll("[data-icon]").forEach((el) => (el.innerHTML = icon(el.dataset.icon)));
     const g = $("sigil").getContext("2d");
     let fire = [

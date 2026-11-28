@@ -50,7 +50,7 @@ const Navpad = (() => {
       )
       .join("");
     if (on) {
-      let scene = UI.$("view").parentElement;
+      let scene = UI.$("view").closest?.(".scene-shell") || UI.$("view").parentElement;
       scene.insertAdjacentElement("afterend", pad);
     }
   }

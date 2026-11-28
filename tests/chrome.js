@@ -17,6 +17,26 @@ try {
   const scenario = fs.readFileSync(path.join(__dirname, "scenarios.js"), "utf8");
   const controls = `
     const initialState = JSON.stringify(Game.state);
+    const options = document.querySelector('.view-options');
+    options.open = true;
+    const boxes = Array.from(options.querySelectorAll('input'));
+    for (const box of boxes) {
+      box.click();
+      for (const id of box.getAttribute('aria-controls').split(' ')) {
+        if (document.getElementById(id).getClientRects().length) throw Error('View option did not hide ' + id);
+      }
+    }
+    if (document.querySelector('.readouts').getClientRects().length || !options.getClientRects().length ||
+        !document.getElementById('interact').getClientRects().length) throw Error('Empty panels or lost layout controls');
+    if (JSON.parse(localStorage.getItem('emberfall.hiddenViewPanels')).length !== boxes.length) throw Error('Layout not saved');
+    for (const box of boxes) {
+      box.click();
+      if (box.getAttribute('aria-controls').split(' ').some(id => !document.getElementById(id).getClientRects().length)) throw Error('Panel not restored');
+    }
+    options.open = false;
+    if (matchMedia('(max-width: 720px), (max-height: 480px)').matches &&
+        document.getElementById('interact').getBoundingClientRect().top < document.getElementById('view').getBoundingClientRect().bottom - 1)
+      throw Error('Interact covers small-screen scene');
     const padButton = document.querySelector('#commands [data-act="pad"]');
     const padInitiallyOpen = Game.state.pad;
     padButton.focus();

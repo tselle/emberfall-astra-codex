@@ -1033,6 +1033,22 @@ dialog:has(#battlefield) {
     font-size: 14px;
   }
 }
+.view-options {
+  margin: 0 0 10px;
+  color: #e2d9c0;
+}
+.view-options summary { cursor: pointer; width: fit-content; padding: 6px 2px; }
+.view-options fieldset { display: flex; flex-wrap: wrap; gap: 2px 16px; border: 1px solid #575747; }
+.view-options label { display: flex; align-items: center; gap: 5px; min-height: 36px; cursor: pointer; }
+.scene-shell { position: relative; }
+main [hidden] { display: none !important; }
+.play-layout:has(> .party[hidden]), .readouts:has(> [hidden]) { grid-template-columns: minmax(0, 1fr); }
+.readouts:not(:has(> :not([hidden]))) { display: none; }
+@media (max-width: 720px), (max-height: 480px) {
+  .scene-shell #interact { position: static; width: 100%; min-height: 44px; }
+  .view-options label, .view-options summary { min-height: 44px; }
+  .view-options summary { padding-block: 12px; }
+}
 #touchpad.active {
   display: flex;
   justify-content: center;

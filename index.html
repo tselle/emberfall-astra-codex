@@ -33,25 +33,36 @@
         </div>
         <div class="gold"><span data-icon="coins"></span><b id="gold">120</b> GP</div>
       </div>
+      <details class="view-options">
+        <summary>View options</summary>
+        <fieldset><legend>Show on the main view</legend>
+          <label><input type="checkbox" aria-controls="scene-heading scene-note" checked> Scene labels</label>
+          <label><input type="checkbox" aria-controls="bearing" checked> Compass</label>
+          <label><input type="checkbox" aria-controls="map-panel" checked> Area map</label>
+          <label><input type="checkbox" aria-controls="log-panel" checked> Expedition log</label>
+          <label><input type="checkbox" aria-controls="party-panel" checked> Company</label>
+          <label><input type="checkbox" aria-controls="command-panel" checked> Commands</label>
+          <label><input type="checkbox" aria-controls="library" checked> Reference buttons</label>
+        </fieldset>
+      </details>
       <div class="play-layout">
         <section class="explore">
-          <div class="scene frame">
+          <div class="scene-shell"><div class="scene frame">
             <canvas id="view" width="640" height="326" aria-label="First-person exploration view"></canvas>
-            <div class="scene-title">
+            <div class="scene-title" id="scene-heading">
               <div class="eyebrow"><span class="live-light"></span><span id="biome">Settlement</span></div>
               <h1 id="location">Thornwick</h1>
             </div>
             <div class="bearing" id="bearing"></div>
-            <div class="scene-caption">
+            <div class="scene-caption" id="scene-note">
               <span data-icon="pin"></span><span id="scene-caption">Market street</span>
             </div>
-            <button id="interact" data-act="interact" title="Interact with the square ahead">
-              Interact <kbd>↵</kbd></button
-            ><i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i
-            ><i class="corner br"></i>
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+          </div>
+            <button id="interact" data-act="interact" title="Interact with the square ahead">Interact <kbd>↵</kbd></button>
           </div>
           <div class="readouts">
-            <div class="mini-panel panel">
+            <div class="mini-panel panel" id="map-panel">
               <div class="panel-title">
                 <span data-icon="map"></span> Area map<button
                   class="icon-only"
@@ -63,13 +74,13 @@
               </div>
               <canvas id="minimap" width="208" height="101" aria-label="Local area map"></canvas>
             </div>
-            <section class="log-panel panel">
+            <section class="log-panel panel" id="log-panel">
               <div class="panel-title"><span data-icon="quill"></span> Expedition log</div>
               <div id="log" role="log"></div>
             </section>
           </div>
         </section>
-        <aside class="party panel">
+        <aside class="party panel" id="party-panel">
           <div class="panel-title party-title">
             <span data-icon="company"></span>
             <h2>Your company</h2>
@@ -78,7 +89,7 @@
           <div id="roster"></div>
         </aside>
       </div>
-      <div class="command-panel panel">
+      <div class="command-panel panel" id="command-panel">
         <div class="cmd-label">Commands</div>
         <div id="commands"></div>
       </div>
