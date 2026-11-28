@@ -78,7 +78,12 @@ try {
     document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
     if (dialog.dispatchEvent(new Event('cancel', {cancelable:true})) || !dialog.open) throw Error('Escape dismissed dialog');
     document.dispatchEvent(new KeyboardEvent('keydown', {key:'Delete', bubbles:true}));
-    if (dialog.open) throw Error('Delete did not dismiss dialog');
+    if (!dialog.open) throw Error('Delete dismissed dialog');
+    document.dispatchEvent(new KeyboardEvent('keydown', {key:'Tab', shiftKey:true, bubbles:true}));
+    if (!dialog.open) throw Error('Shift+Tab dismissed dialog');
+    const tab = new KeyboardEvent('keydown', {key:'Tab', bubbles:true, cancelable:true});
+    dialog.querySelector('[data-act="close"]').dispatchEvent(tab);
+    if (dialog.open || !tab.defaultPrevented) throw Error('Tab did not dismiss dialog');
     document.querySelector('[data-act="journal"]').click();
     if (!document.getElementById("dialog").open) throw Error("Journal click");
     document.querySelector('[data-act="close"]').click();

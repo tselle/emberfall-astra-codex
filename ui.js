@@ -118,7 +118,7 @@ const UI = (() => {
       if (e.detail > 0 && b === document.activeElement && b.matches("button")) b.blur();
       Game.act(b.dataset.act, b.dataset.arg, b);
     });
-    // Suppress the native Escape dismissal; Delete uses the game's close action.
+    // Suppress the native Escape dismissal; Tab uses the game's close action.
     $("dialog").addEventListener("cancel", e => e.preventDefault());
   }
   const dialogKeys = new Map();
@@ -162,7 +162,7 @@ const UI = (() => {
   function dialogKey(e) {
     if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
     const key = e.key.toLowerCase();
-    if (key === "delete" && !e.shiftKey && !e.target.isContentEditable) {
+    if (key === "tab" && !e.shiftKey && !e.target.isContentEditable) {
       e.preventDefault();
       keyPrefix = "";
       if (!e.repeat) Game.act("close");
@@ -338,7 +338,7 @@ const UI = (() => {
           ["M / J / B", "Map, journal or bestiary"],
           ["1–6", "Inspect a company member"],
           ["Esc", "Open game menu"],
-          ["Del", "Close panel"],
+          ["Tab", "Close panel"],
         ]
           .map(([k, v]) => '<div class="keyline"><kbd>' + k + "</kbd>" + v + "</div>")
           .join("") +

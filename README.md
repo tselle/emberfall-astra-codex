@@ -22,7 +22,7 @@ The opening company is ready for play. **Game menu → Create company** lets you
 | Campaign / field guide | C / ? |
 | Character sheets | 1–6 |
 | Open game menu | Esc |
-| Close panel | Del |
+| Close panel (except while editing a field) | Tab |
 
 **Move** toggles the on-screen movement pad. The pad starts open on touch devices. You can also swipe the scene to move or turn. In combat, select an action and a square on the field. Full-body figurines face their opponents, stride between squares, and react to attacks. **Battle animations** toggles both idle motion and action playback; reduced-motion preferences start them off. Named target buttons provide another way to choose a creature. **Auto-fight** resolves the encounter for the company. Choose Auto this turn to automate one combatant’s turn. Cycle Auto spells through Yes (cast automatically), No (save prepared spells), and Ask (approve or skip each proposed cast).
 

@@ -1,6 +1,6 @@
 "use strict";
 const Game = (() => {
-  const releaseVersion = "v.2026.11.28.1";
+  const releaseVersion = "v.2026.11.28.2";
   const prefix = "emberfall.1.",
     $ = UI.$,
     btn = UI.btn,
