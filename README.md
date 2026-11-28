@@ -75,4 +75,4 @@ The script order in index.html follows the game’s dependencies. Rules and cont
 
 Released under the [MIT licence](LICENSE).
 
-The Game menu displays the release version. Run `node scripts/bump-version.js` when preparing a release. It increments the number for the local calendar date and starts at 1 on a new day.
+The Game menu displays the release version. After cloning, run `git config --local core.hooksPath .githooks` once to enable the pre-commit hook. Each commit includes its own version bump in `game.js`: the counter starts at 1 on each new local calendar date. Stage or stash unstaged edits to `game.js` before committing; the hook will not stage them for you.

@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+# Never stage unrelated work from a partially staged game.js.
+if ! git diff --quiet -- game.js; then
+  echo 'Version bump needs a clean game.js worktree. Stage or stash its unstaged edits first.' >&2
+  exit 1
+fi
+node scripts/bump-version.js --commit
+git add -- game.js
